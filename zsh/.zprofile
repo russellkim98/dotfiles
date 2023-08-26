@@ -3,3 +3,8 @@
 if [[ -r /etc/profile ]] && [[ "${OSTYPE}" != darwin* ]]; then
     emulate sh -c 'source /etc/profile'
 fi
+
+
+
+
+eval "$(/usr/local/bin/brew shellenv)"
