@@ -47,6 +47,7 @@ print "Compiling zsh plugins..."
     autoload -Uz zrecompile
     for plugin_file in ${SCRIPT_DIR}/zsh/plugins/**/*.zsh
     do
+        print "${plugin_file}"
         zrecompile -pq "${plugin_file}"
     done
 }
