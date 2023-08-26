@@ -97,10 +97,6 @@ alias -s log=less
     alias stmux="tmux new-session 'sudo --login'"
 }
 (( ${+commands[wget]} )) && alias wget="wget --hsts-file=${XDG_CACHE_HOME}/wget-hsts"
-(( ${+commands[ls]} )) && {
-    alias ls="gls --group-directories-first --color=auto --hyperlink=auto --classify"
-    alias ll="LC_COLLATE=C ls -l -v --almost-all --human-readable"
-}
 
 # History suppression
 (( ${+commands[clear]} )) && alias clear=" clear"
@@ -108,7 +104,7 @@ alias pwd=" pwd"
 alias exit=" exit"
 
 # Safety
-(( ${+commands[rm]} )) && alias rm="rm -I --preserve-root=all"
+(( ${+commands[rm]} )) && alias rm="rm --preserve-root=all"
 
 # Suppress suggestions and globbing, enable wrappers
 (( ${+commands[find]} )) && alias find="noglob find"
@@ -119,3 +115,14 @@ alias exit=" exit"
 (( ${+commands[fd]} )) && alias fd="noglob fd"
 (( ${+commands[man]} )) && alias man="nocorrect wrap_man"
 (( ${+commands[sudo]} )) && alias sudo="noglob wrap_sudo " # trailing space is needed to enable alias expansion
+
+
+source /usr/local/opt/spaceship/spaceship.zsh
+
+
+# PYENV, for python
+# 3.8.18 should be the global as of Aug 26, 2023
+export PYENV_ROOT="$HOME/.pyenv"
+command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+
