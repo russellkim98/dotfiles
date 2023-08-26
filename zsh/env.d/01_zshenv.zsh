@@ -9,5 +9,5 @@ zmodload -F -m zsh/files b:zf_\*
 
 
 # Prefered editor and pager
-export VISUAL=vim
-export EDITOR=vim
+export VISUAL=nvim
+export EDITOR=nvim

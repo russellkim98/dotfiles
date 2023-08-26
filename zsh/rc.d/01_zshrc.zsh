@@ -97,11 +97,13 @@ alias -s log=less
     alias stmux="tmux new-session 'sudo --login'"
 }
 (( ${+commands[wget]} )) && alias wget="wget --hsts-file=${XDG_CACHE_HOME}/wget-hsts"
+(( ${+commands[ls]} )) && alias ls="ls --color=always"
 
 # History suppression
 (( ${+commands[clear]} )) && alias clear=" clear"
 alias pwd=" pwd"
 alias exit=" exit"
+alias v="nvim"
 
 # Safety
 (( ${+commands[rm]} )) && alias rm="rm --preserve-root=all"
