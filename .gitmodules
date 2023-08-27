@@ -10,3 +10,6 @@
 [submodule "zsh/plugins/nordtheme-iterm2"]
 	path = zsh/plugins/nordtheme-iterm2
 	url = https://github.com/nordtheme/iterm2.git
+[submodule "zsh/plugins/zsh-autopair"]
+	path = zsh/plugins/zsh-autopair
+	url = https://github.com/hlissner/zsh-autopair
