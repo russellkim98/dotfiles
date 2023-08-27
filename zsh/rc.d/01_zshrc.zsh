@@ -105,9 +105,6 @@ alias pwd=" pwd"
 alias exit=" exit"
 alias v="nvim"
 
-# Safety
-(( ${+commands[rm]} )) && alias rm="rm --preserve-root=all"
-
 # Suppress suggestions and globbing, enable wrappers
 (( ${+commands[find]} )) && alias find="noglob find"
 (( ${+commands[touch]} )) && alias touch="nocorrect touch"
