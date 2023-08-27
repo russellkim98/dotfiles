@@ -31,4 +31,5 @@ brew install --cask iterm2
 brew install spaceship
 brew install neovim
 
+curl -sSL https://install.python-poetry.org | python3 -
 
