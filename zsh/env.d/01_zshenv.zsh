@@ -35,6 +35,9 @@ export JENV_ROOT="$HOME/.jenv"
 export PATH="$JENV_ROOT/bin:$PATH"
 jenv init - >/dev/null
 
+export POETRY_HOME="$HOME/.poetry"
+export PATH="$POETRY_HOME/bin:$PATH"
+
 
 
 # Prefered editor and pager

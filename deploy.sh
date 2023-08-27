@@ -20,10 +20,7 @@ cd "${SCRIPT_DIR}"
 
 
 # Env management, priority no. 1
-brew install pyenv
-brew install goenv
-brew install rbenv
-brew install jenv
+brew install -q pyenv, goenv, rbenv, jenv
 
 
 # personal tools
@@ -31,5 +28,6 @@ brew install --cask iterm2
 brew install spaceship
 brew install neovim
 
+# poetry
 curl -sSL https://install.python-poetry.org | python3 -
 
