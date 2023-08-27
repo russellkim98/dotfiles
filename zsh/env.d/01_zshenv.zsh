@@ -40,6 +40,3 @@ export PATH="$POETRY_HOME/bin:$PATH"
 
 
 
-# Prefered editor and pager
-export VISUAL=nvim
-export EDITOR=nvim

@@ -117,3 +117,7 @@ alias v="nvim"
 
 
 source /usr/local/opt/spaceship/spaceship.zsh
+# Prefered editor and pager
+export VISUAL=nvim
+export EDITOR=nvim
+
