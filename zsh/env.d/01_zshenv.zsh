@@ -8,6 +8,3 @@ fi
 zmodload -F -m zsh/files b:zf_\*
 
 
-# Prefered editor and pager
-export VISUAL=nvim
-export EDITOR=nvim

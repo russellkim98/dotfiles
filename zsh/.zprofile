@@ -7,4 +7,15 @@ fi
 
 
 
+# Where  Homebrew starts
 eval "$(/usr/local/bin/brew shellenv)"
+
+# Prefered editor and pager
+export VISUAL=nvim
+export EDITOR=nvim
+
+# PYENV, for python
+# 3.8.18 should be the global as of Aug 26, 2023
+export PYENV_ROOT="$HOME/.pyenv"
+command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"

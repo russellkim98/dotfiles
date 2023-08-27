@@ -97,7 +97,7 @@ alias -s log=less
     alias stmux="tmux new-session 'sudo --login'"
 }
 (( ${+commands[wget]} )) && alias wget="wget --hsts-file=${XDG_CACHE_HOME}/wget-hsts"
-(( ${+commands[ls]} )) && alias ls="ls --color=always"
+(( ${+commands[ls]} )) && alias ls="ls -a --color=always"
 
 # History suppression
 (( ${+commands[clear]} )) && alias clear=" clear"
@@ -120,11 +120,3 @@ alias v="nvim"
 
 
 source /usr/local/opt/spaceship/spaceship.zsh
-
-
-# PYENV, for python
-# 3.8.18 should be the global as of Aug 26, 2023
-export PYENV_ROOT="$HOME/.pyenv"
-command -v pyenv >/dev/null || export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
-
