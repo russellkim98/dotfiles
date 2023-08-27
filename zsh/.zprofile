@@ -5,8 +5,6 @@ if [[ -r /etc/profile ]] && [[ "${OSTYPE}" != darwin* ]]; then
 fi
 
 
-
-
 # Where  Homebrew starts
 eval "$(/usr/local/bin/brew shellenv)"
 
