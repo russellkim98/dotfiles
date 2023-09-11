@@ -15,28 +15,5 @@ if [[ -r /etc/profile ]] && [[ "${OSTYPE}" != darwin* ]]; then
     emulate sh -c 'source /etc/profile'
 fi
 
-
 # Where  Homebrew starts
 eval "$(/usr/local/bin/brew shellenv)"
-
-export PYENV_ROOT="$HOME/.pyenv"
-export PATH="$PYENV_ROOT/bin:$PATH"
-pyenv init - >/dev/null
-
-export GOENV_ROOT="$HOME/.goenv"
-export PATH="$GOENV_ROOT/bin:$PATH"
-goenv init - >/dev/null
-
-export RBENV_ROOT="$HOME/.rbenv"
-export PATH="$RBENV_ROOT/bin:$PATH"
-rbenv init - >/dev/null
-
-export JENV_ROOT="$HOME/.jenv"
-export PATH="$JENV_ROOT/bin:$PATH"
-jenv init - >/dev/null
-
-export POETRY_HOME="$HOME/.poetry"
-export PATH="$POETRY_HOME/bin:$PATH"
-
-
-
