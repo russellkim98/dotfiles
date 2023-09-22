@@ -116,7 +116,7 @@ alias v="nvim"
 (( ${+commands[sudo]} )) && alias sudo="noglob wrap_sudo " # trailing space is needed to enable alias expansion
 
 
-source /usr/local/opt/spaceship/spaceship.zsh
+source $(brew --prefix)/opt/spaceship/spaceship.zsh
 # Prefered editor and pager
 export VISUAL=nvim
 export EDITOR=nvim
