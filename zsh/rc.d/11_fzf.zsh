@@ -14,4 +14,3 @@ source "${DOTFILES}/tools/fzf/shell/key-bindings.zsh"
 source "${ZDOTDIR}/plugins/fzf-tab/fzf-tab.zsh"
 
 zstyle ':fzf-tab:*' prefix ''
-

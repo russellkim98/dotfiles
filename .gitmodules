@@ -25,3 +25,12 @@
 [submodule "zsh/plugins/zsh-abbr"]
 	path = zsh/plugins/zsh-abbr
 	url = git@github.com:olets/zsh-abbr.git
+[submodule "tools/git-extras"]
+	path = tools/git-extras
+	url = git@github.com:tj/git-extras.git
+[submodule "tools/fzf"]
+	path = tools/fzf
+	url = git@github.com:junegunn/fzf.git
+[submodule "tools/spark"]
+	path = tools/spark
+	url = git@github.com:holman/spark.git
