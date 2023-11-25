@@ -14,6 +14,3 @@ zmodload -F -m zsh/files b:zf_\*
 if [[ -r /etc/profile ]] && [[ "${OSTYPE}" != darwin* ]]; then
     emulate sh -c 'source /etc/profile'
 fi
-
-# Where  Homebrew starts
-eval "$(/usr/local/bin/brew shellenv)"

@@ -13,3 +13,39 @@
 [submodule "zsh/plugins/zsh-syntax-highlighting"]
 	path = zsh/plugins/zsh-syntax-highlighting
 	url = git@github.com:zsh-users/zsh-syntax-highlighting.git
+[submodule "zsh/plugins/fzf-tab"]
+	path = zsh/plugins/fzf-tab
+	url = git@github.com:Aloxaf/fzf-tab.git
+[submodule "zsh/plugins/iTerm2-shell-integration"]
+	path = zsh/plugins/iTerm2-shell-integration
+	url = git@github.com:gnachman/iTerm2-shell-integration.git
+[submodule "zsh/plugins/zsh-autoenv"]
+	path = zsh/plugins/zsh-autoenv
+	url = git@github.com:Tarrasch/zsh-autoenv.git
+[submodule "zsh/plugins/zsh-abbr"]
+	path = zsh/plugins/zsh-abbr
+	url = git@github.com:olets/zsh-abbr.git
+[submodule "tools/git-extras"]
+	path = tools/git-extras
+	url = git@github.com:tj/git-extras.git
+[submodule "tools/fzf"]
+	path = tools/fzf
+	url = git@github.com:junegunn/fzf.git
+[submodule "tools/spark"]
+	path = tools/spark
+	url = git@github.com:holman/spark.git
+[submodule "config/nvim"]
+	path = config/nvim
+	url = git@github.com:AstroNvim/AstroNvim.git
+[submodule "config/my-astronvim-config"]
+	path = config/my-astronvim-config
+	url = git@github.com:russellkim98/my-astronvim-config.git
+[submodule "config/nvim-config/user"]
+	path = config/nvim-config/user
+	url = git@github.com:russellkim98/my-astronvim-config.git
+[submodule "config/astronvim/user"]
+	path = config/astronvim/user
+	url = git@github.com:russellkim98/my-astronvim-config.git
+[submodule "zsh/plugins/zsh-completions"]
+	path = zsh/plugins/zsh-completions
+	url = git@github.com:zsh-users/zsh-completions.git
