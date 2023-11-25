@@ -41,6 +41,9 @@ fi
 
 echo "${SCRIPT_DIR}"
 
+# make sure configs are symlinked
+zf_ln -sf "${SCRIPT_DIR}/configs/nvim" "${XDG_CONFIG_HOME}"
+
 # Make sure submodules are installed
 print "Syncing submodules..."
 git submodule sync >/dev/null
