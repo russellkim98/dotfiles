@@ -1,5 +1,8 @@
 # Determine own path if ZDOTDIR isn't set or home symlink exists
-export ZDOTDIR="${0:a:h}"
+if [[ -z "${ZDOTDIR}" || -L "${HOME}/.zshenv" ]]; then
+    local homezshenv="${HOME}/.zshenv"
+    ZDOTDIR="${homezshenv:A:h}"
+fi
 # DOTFILES dir is parent to ZDOTDIR
 export DOTFILES="${ZDOTDIR:h}"
 

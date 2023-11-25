@@ -13,13 +13,14 @@ curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
 brew install git
 brew install zsh
 
-# Get the current path
 zmodload -m -F zsh/files b:zf_\*
-SCRIPT_DIR="${0:A:h}"
-cd "${SCRIPT_DIR}" || exit
 
 # Get the current path
 SCRIPT_DIR="${0:A:h}"
+cd "${SCRIPT_DIR}" || exit
+
+echo "script directory"
+echo "${SCRIPT_DIR}"
 
 # Link zshenv if needed
 print "Checking for ZDOTDIR env variable..."
@@ -29,6 +30,29 @@ else
 	ln -sf "${SCRIPT_DIR}/zsh/.zshenv" "${ZDOTDIR:-${HOME}}/.zshenv"
 	print "  ...failed to match this script dir, symlinking .zshenv"
 fi
+
+echo "${SCRIPT_DIR}"
+
+
+# Make sure submodules are installed
+print "Syncing submodules..."
+git submodule sync >/dev/null
+git submodule update --init --recursive >/dev/null
+git clean -ffd
+print "  ...done"
+
+print "${DOTFILES}"
+print "Compiling zsh plugins..."
+{
+	emulate -LR zsh
+	setopt local_options extended_glob
+	autoload -Uz zrecompile
+	for plugin_file in ${DOTFILES}/zsh/plugins/**/*.zsh; do
+		print "${plugin_file}"
+		zrecompile -pq "${plugin_file}"
+	done
+}
+print "  ...done"
 
 # Env management, priority no. 1
 brew install -q pyenv, goenv, rbenv, jenv
