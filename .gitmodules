@@ -34,3 +34,15 @@
 [submodule "tools/spark"]
 	path = tools/spark
 	url = git@github.com:holman/spark.git
+[submodule "config/nvim"]
+	path = config/nvim
+	url = git@github.com:AstroNvim/AstroNvim.git
+[submodule "config/my-astronvim-config"]
+	path = config/my-astronvim-config
+	url = git@github.com:russellkim98/my-astronvim-config.git
+[submodule "config/nvim-config/user"]
+	path = config/nvim-config/user
+	url = git@github.com:russellkim98/my-astronvim-config.git
+[submodule "config/astronvim/user"]
+	path = config/astronvim/user
+	url = git@github.com:russellkim98/my-astronvim-config.git

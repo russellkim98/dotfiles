@@ -6,6 +6,8 @@
 # Install xcode dev tools
 xcode-select --install
 
+zmodload -m -F zsh/files b:zf_\*
+
 # install brew
 curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
 
@@ -13,7 +15,13 @@ curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
 brew install git
 brew install zsh
 
-zmodload -m -F zsh/files b:zf_\*
+# Env management, priority no. 1
+brew install -q pyenv, goenv, rbenv, jenv
+
+# personal tools
+brew install --cask iterm2
+brew install spaceship
+brew install neovim
 
 # Get the current path
 SCRIPT_DIR="${0:A:h}"
@@ -32,7 +40,6 @@ else
 fi
 
 echo "${SCRIPT_DIR}"
-
 
 # Make sure submodules are installed
 print "Syncing submodules..."
@@ -53,14 +60,6 @@ print "Compiling zsh plugins..."
 	done
 }
 print "  ...done"
-
-# Env management, priority no. 1
-brew install -q pyenv, goenv, rbenv, jenv
-
-# personal tools
-brew install --cask iterm2
-brew install spaceship
-brew install neovim
 
 # poetry
 curl -sSL https://install.python-poetry.org | python3 -
