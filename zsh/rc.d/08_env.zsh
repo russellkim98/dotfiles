@@ -3,24 +3,27 @@
 # Brew-related environments
 
 # 3.10.0 should be the global as of Aug 26, 2023
-# export PYENV_ROOT="$HOME/.pyenv"
-# export PATH="$PYENV_ROOT/bin:$PATH"
-pyenv init - >/dev/null
+export PYENV_ROOT="$HOME/.pyenv"
+export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
 
-# export GOENV_ROOT="$HOME/.goenv"
-# export PATH="$GOENV_ROOT/bin:$PATH"
-goenv init - >/dev/null
+export GOENV_ROOT="$HOME/.goenv"
+export PATH="$GOENV_ROOT/bin:$PATH"
+eval "$(goenv init -)"
 
-# export PATH="$GOROOT/bin:$PATH"
-# export PATH="$PATH:$GOPATH/bin"
-#
-# export RBENV_ROOT="$HOME/.rbenv"
-# export PATH="$RBENV_ROOT/bin:$PATH"
-rbenv init - >/dev/null
+export PATH="$GOROOT/bin:$PATH"
+export PATH="$PATH:$GOPATH/bin"
 
-# export JENV_ROOT="$HOME/.jenv"
-# export PATH="$JENV_ROOT/bin:$PATH"
-jenv init - >/dev/null
+
+export RBENV_ROOT="$HOME/.rbenv"
+export PATH="$RBENV_ROOT/bin:$PATH"
+# eval "$(rbenv init -)"
+
+export JENV_ROOT="$HOME/.jenv"
+export PATH="$JENV_ROOT/bin:$PATH"
+# eval "$(jenv init -)"
 
 # export POETRY_HOME="$HOME/.poetry"
 # export PATH="$POETRY_HOME/bin:$PATH"
+export POETRY_HOME="$HOME/.poetry"
+export PATH="$POETRY_HOME/bin:$PATH"

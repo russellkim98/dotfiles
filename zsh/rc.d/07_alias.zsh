@@ -20,6 +20,7 @@ alias -s log=less
 alias pwd=" pwd"
 alias exit=" exit"
 alias v="nvim"
+alias restart="exec $SHELL"
 
 # Suppress suggestions and globbing, enable wrappers
 (( ${+commands[find]} )) && alias find="noglob find"
