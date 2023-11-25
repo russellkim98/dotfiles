@@ -29,3 +29,19 @@ autoload -Uz up-line-or-beginning-search
 zle -N up-line-or-beginning-search
 autoload -Uz down-line-or-beginning-search
 zle -N down-line-or-beginning-search
+
+
+# Enable functions from archive plugin
+fpath+="${ZDOTDIR}/plugins/archive"
+autoload -Uz archive lsarchive unarchive
+
+# Ensure add-zsh-hook is loaded, as it's used in rc files
+autoload -Uz add-zsh-hook
+
+# Custom personal functions
+# Don't use -U as we need aliases here
+autoload -z lspath bag fgb fgd fgl fz ineachdir psg vpaste evalcache compdefcache
+
+# Enable wrapper, if original command is available
+(( ${+commands[man]} )) && autoload -z wrap-man
+(( ${+commands[sudo]} )) && autoload -z wrap-sudo

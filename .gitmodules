@@ -46,3 +46,6 @@
 [submodule "config/astronvim/user"]
 	path = config/astronvim/user
 	url = git@github.com:russellkim98/my-astronvim-config.git
+[submodule "zsh/plugins/zsh-completions"]
+	path = zsh/plugins/zsh-completions
+	url = git@github.com:zsh-users/zsh-completions.git

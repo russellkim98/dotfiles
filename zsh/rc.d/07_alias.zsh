@@ -29,5 +29,5 @@ alias restart="exec $SHELL"
 (( ${+commands[cp]} )) && alias cp="nocorrect cp --verbose"
 (( ${+commands[ag]} )) && alias ag="noglob ag"
 (( ${+commands[fd]} )) && alias fd="noglob fd"
-(( ${+commands[man]} )) && alias man="nocorrect wrap_man"
+(( ${+commands[man]} )) && alias man="nocorrect wrap-man"
 (( ${+commands[sudo]} )) && alias sudo="noglob wrap_sudo " # trailing space is needed to enable alias expansion
