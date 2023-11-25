@@ -4,7 +4,7 @@ ZSH_AUTOSUGGEST_MANUAL_REBIND=1
 ZSH_AUTOSUGGEST_STRATEGY=(history completion)
 
 # Autosuggestions plugin
-source "${ZDOTDIR}/plugins/autosuggestions/zsh-autosuggestions.zsh"
+source "${ZDOTDIR}/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
 
 # Clear suggestions after paste
 ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)

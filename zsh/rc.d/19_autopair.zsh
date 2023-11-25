@@ -1,3 +1,3 @@
 # Autopairs plugin
-source "${ZDOTDIR}/plugins/autopair/autopair.zsh"
+source "${ZDOTDIR}/plugins/zsh-autopair/autopair.zsh"
 
