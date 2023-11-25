@@ -13,3 +13,15 @@
 [submodule "zsh/plugins/zsh-syntax-highlighting"]
 	path = zsh/plugins/zsh-syntax-highlighting
 	url = git@github.com:zsh-users/zsh-syntax-highlighting.git
+[submodule "zsh/plugins/fzf-tab"]
+	path = zsh/plugins/fzf-tab
+	url = git@github.com:Aloxaf/fzf-tab.git
+[submodule "zsh/plugins/iTerm2-shell-integration"]
+	path = zsh/plugins/iTerm2-shell-integration
+	url = git@github.com:gnachman/iTerm2-shell-integration.git
+[submodule "zsh/plugins/zsh-autoenv"]
+	path = zsh/plugins/zsh-autoenv
+	url = git@github.com:Tarrasch/zsh-autoenv.git
+[submodule "zsh/plugins/zsh-abbr"]
+	path = zsh/plugins/zsh-abbr
+	url = git@github.com:olets/zsh-abbr.git
