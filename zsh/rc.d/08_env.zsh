@@ -22,6 +22,10 @@ export PATH="$RBENV_ROOT/bin:$PATH"
 export JENV_ROOT="$HOME/.jenv"
 export PATH="$JENV_ROOT/bin:$PATH"
 # eval "$(jenv init -)"
+#
+export NODENV_ROOT="$HOME/.nodenv"
+export PATH="$NODENV_ROOT/bin:$PATH"
+eval "$(nodenv init -)"
 
 # export POETRY_HOME="$HOME/.poetry"
 # export PATH="$POETRY_HOME/bin:$PATH"
