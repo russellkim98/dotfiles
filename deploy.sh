@@ -30,16 +30,6 @@ cd "${SCRIPT_DIR}" || exit
 echo "script directory"
 echo "${SCRIPT_DIR}"
 
-# Link zshenv if needed
-print "Checking for ZDOTDIR env variable..."
-if [[ "${ZDOTDIR}" = "${SCRIPT_DIR}/zsh" ]]; then
-    print "  ...present and valid, skipping .zshenv symlink"
-else
-    ln -sf "${SCRIPT_DIR}/zsh/.zshenv" "${ZDOTDIR:-${HOME}}/.zshenv"
-    print "  ...failed to match this script dir, symlinking .zshenv"
-fi
-
-echo "${SCRIPT_DIR}"
 
 # make sure configs are symlinked
 pushd "${XDG_CONFIG_HOME}"

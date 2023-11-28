@@ -1,6 +1,6 @@
 # Include interactive rc files
-echo "${ZDOTDIR}"
-for conffile in "${ZDOTDIR}"/rc.d/*; do
+echo "${DOTFILES}"
+for conffile in "${DOTFILES}"/zsh/rc.d/*; do
     source "${conffile}"
 done
 
