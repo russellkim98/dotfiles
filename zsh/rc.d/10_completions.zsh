@@ -14,7 +14,7 @@ if [[ -d "${XDG_CACHE_HOME}/zsh/fpath" ]]; then
 fi
 
 # Additional completions
-fpath+="${ZDOTDIR}/plugins/zsh-completions/src"
+fpath+="${DOTFILES}/zsh/plugins/zsh-completions/src"
 
 # Enable git-extras completions
 source "${DOTFILES}/tools/git-extras/etc/git-extras-completion.zsh"

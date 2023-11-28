@@ -1,3 +1,4 @@
 # Where  Homebrew starts
-eval "$(/usr/local/bin/brew shellenv)"
+export BREW=$(which brew)
+eval "$(BREW shellenv)"
 

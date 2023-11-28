@@ -11,6 +11,6 @@ fi
 source "${DOTFILES}/tools/fzf/shell/key-bindings.zsh"
 
 # Use fzf for tab completions
-source "${ZDOTDIR}/plugins/fzf-tab/fzf-tab.zsh"
+source "${DOTFILES}/zsh/plugins/fzf-tab/fzf-tab.zsh"
 
 zstyle ':fzf-tab:*' prefix ''

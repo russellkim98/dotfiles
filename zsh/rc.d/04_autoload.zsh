@@ -32,7 +32,7 @@ zle -N down-line-or-beginning-search
 
 
 # Enable functions from archive plugin
-fpath+="${ZDOTDIR}/plugins/archive"
+fpath+="${DOTFILES}/zsh/plugins/archive"
 autoload -Uz archive lsarchive unarchive
 
 # Ensure add-zsh-hook is loaded, as it's used in rc files
