@@ -13,4 +13,5 @@ source "${DOTFILES}/tools/fzf/shell/key-bindings.zsh"
 # Use fzf for tab completions
 source "${DOTFILES}/zsh/plugins/fzf-tab/fzf-tab.zsh"
 
+[ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
 zstyle ':fzf-tab:*' prefix ''
