@@ -1,60 +1,59 @@
 [submodule "zsh/plugins/zsh-z"]
 	path = zsh/plugins/zsh-z
 	url = https://github.com/agkozak/zsh-z.git
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/zsh-autosuggestions"]
 	path = zsh/plugins/zsh-autosuggestions
 	url = https://github.com/zsh-users/zsh-autosuggestions
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/nordtheme-iterm2"]
 	path = zsh/plugins/nordtheme-iterm2
 	url = https://github.com/nordtheme/iterm2.git
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/zsh-autopair"]
 	path = zsh/plugins/zsh-autopair
 	url = https://github.com/hlissner/zsh-autopair
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/zsh-syntax-highlighting"]
 	path = zsh/plugins/zsh-syntax-highlighting
 	url = git@github.com:zsh-users/zsh-syntax-highlighting.git
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/fzf-tab"]
 	path = zsh/plugins/fzf-tab
 	url = git@github.com:Aloxaf/fzf-tab.git
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/iTerm2-shell-integration"]
 	path = zsh/plugins/iTerm2-shell-integration
 	url = git@github.com:gnachman/iTerm2-shell-integration.git
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/zsh-autoenv"]
 	path = zsh/plugins/zsh-autoenv
 	url = git@github.com:Tarrasch/zsh-autoenv.git
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/zsh-abbr"]
 	path = zsh/plugins/zsh-abbr
 	url = git@github.com:olets/zsh-abbr.git
-	ignore = untracked
+	ignore = all
 [submodule "tools/git-extras"]
 	path = tools/git-extras
 	url = git@github.com:tj/git-extras.git
-	ignore = untracked
+	ignore = all
 [submodule "tools/fzf"]
 	path = tools/fzf
 	url = git@github.com:junegunn/fzf.git
-	ignore = untracked
+	ignore = all
 [submodule "tools/spark"]
 	path = tools/spark
 	url = git@github.com:holman/spark.git
-	ignore = untracked
+	ignore = all
 [submodule "zsh/plugins/zsh-completions"]
 	path = zsh/plugins/zsh-completions
 	url = git@github.com:zsh-users/zsh-completions.git
-	ignore = untracked
+	ignore = all
 [submodule "config/AstroNvim"]
 	path = config/AstroNvim
 	url = git@github.com:AstroNvim/AstroNvim.git
-	ignore = untracked
+	ignore = all
 [submodule "nvim/my-astronvim-config"]
 	path = nvim/my-astronvim-config
 	url = git@github.com:russellkim98/my-astronvim-config.git
-	ignore = dirty
