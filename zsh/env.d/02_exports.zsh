@@ -14,3 +14,11 @@ fi
 if [[ ! -v XDG_RUNTIME_DIR ]]; then
     export XDG_RUNTIME_DIR="${TMPDIR:-/tmp}/runtime-${USER}"
 fi
+
+if [[ ! -v BREW ]]; then
+    if [[ $(uname -m) == 'arm64' ]]; then
+      export BREW="/opt/homebrew/bin/brew"
+    else
+      export BREW="/usr/local/bin/"
+    fi
+fi
