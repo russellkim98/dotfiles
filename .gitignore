@@ -8,3 +8,5 @@
 # compiled zsh script
 */**.zwc
 */**.zwc.old
+
+Brewfile.lock.json
