@@ -54,6 +54,8 @@ fi
 print "Syncing submodules..."
 git submodule sync >/dev/null
 git submodule update --init --recursive >/dev/null
+# Iterate over each submodule and set the ignore option to 'untracked'
+git submodule foreach 'git config submodule."$name".ignore untracked'
 git clean -ffd
 print "  ...done"
 
