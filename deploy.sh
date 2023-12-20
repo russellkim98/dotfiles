@@ -61,6 +61,9 @@ print "  ...done"
 ASTRONVIM="$(git submodule | grep 'AstroNvim' | awk '{print $2}')"
 zf_ln -snf "${DOTFILES}/${ASTRONVIM}" "${XDG_CONFIG_HOME}/nvim"
 
+ASTRONVIM_CONFIG="$(git submodule | grep 'my-astronvim-config' | awk '{print $2}')"
+zf_ln -snf "${DOTFILES}/${ASTRONVIM_CONFIG}" "${XDG_CONFIG_HOME}/nvim/lua/user"
+
 
 print "${DOTFILES}"
 print "Compiling zsh plugins..."
