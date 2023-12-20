@@ -4,9 +4,14 @@
 # Exit immediately if any command exits with a non-zero status
 set -e
 
-# Install Xcode Command Line Tools - necessary for compiling many Homebrew packages
-echo "Installing Xcode Command Line Tools..."
-xcode-select --install
+## Check if Xcode Command Line Tools are already installed by looking for the presence of the 'xcode-select' executable
+if ! xcode-select -p &>/dev/null; then
+    # Install Xcode Command Line Tools
+    echo "Installing Xcode Command Line Tools..."
+    xcode-select --install
+else
+    echo "Xcode Command Line Tools are already installed."
+fi
 
 # Default XDG paths
 XDG_CACHE_HOME="${HOME}/.cache"
@@ -26,8 +31,7 @@ brew update
 # Get the current path
 DOTFILES="${0:A:h}"
 cd "${DOTFILES}" || exit
-echo "Dotfiles directory"
-echo "${DOTFILES}"
+echo "Dotfiles directory: ${DOTFILES}"
 
 ### BREWFILE SECTION ####
 BREWFILE="${DOTFILES}/Brewfile"
@@ -54,10 +58,8 @@ git clean -ffd
 print "  ...done"
 
 # make sure neovim config is symlinked
-pushd "${XDG_CONFIG_HOME}"
-ASTRONVIM="${DOTFILES}/$(git submodule | grep 'AstroNvim' | awk '{print $2}')"
-zf_ln -sf "${ASTRONVIM}" "nvim"
-popd
+ASTRONVIM="$(git submodule | grep 'AstroNvim' | awk '{print $2}')"
+zf_ln -snf "${DOTFILES}/${ASTRONVIM}" "${XDG_CONFIG_HOME}/nvim"
 
 
 print "${DOTFILES}"
