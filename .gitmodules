@@ -57,4 +57,4 @@
 [submodule "nvim/my-astronvim-config"]
 	path = nvim/my-astronvim-config
 	url = git@github.com:russellkim98/my-astronvim-config.git
-	ignore = dirty
+	ignore = all

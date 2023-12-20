@@ -32,7 +32,7 @@ defaults write com.apple.finder ShowExternalHardDrivesOnDesktop -bool true # Sho
 defaults write com.apple.finder FXPreferredViewStyle -string "Nlsv"        # Use list view in Finder by default
 
 # Dock settings
-defaults write com.apple.dock tilesize -int 36                   # Set the icon size of Dock items
+defaults write com.apple.dock tilesize -int 144                  # Set the icon size of Dock items
 defaults write com.apple.dock minimize-to-application -bool true # Minimize windows into their app's icon
 defaults write com.apple.dock autohide -bool true                # Auto-hide the Dock
 
