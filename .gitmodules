@@ -37,3 +37,9 @@
 [submodule "zsh/plugins/zsh-completions"]
 	path = zsh/plugins/zsh-completions
 	url = git@github.com:zsh-users/zsh-completions.git
+[submodule "config/AstroNvim"]
+	path = config/AstroNvim
+	url = git@github.com:AstroNvim/AstroNvim.git
+[submodule "nvim"]
+	path = nvim
+	url = git@github.com:russellkim98/my-astronvim-config.git
