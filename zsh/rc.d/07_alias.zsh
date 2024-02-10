@@ -30,4 +30,4 @@ alias restart="exec $SHELL"
 (( ${+commands[ag]} )) && alias ag="noglob ag"
 (( ${+commands[fd]} )) && alias fd="noglob fd"
 (( ${+commands[man]} )) && alias man="nocorrect wrap-man"
-(( ${+commands[sudo]} )) && alias sudo="noglob wrap_sudo " # trailing space is needed to enable alias expansion
+# (( ${+commands[sudo]} )) && alias sudo="noglob wrap_sudo " # trailing space is needed to enable alias expansion
