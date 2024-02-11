@@ -17,8 +17,8 @@ fi
 
 if [[ ! -v BREW ]]; then
     if [[ $(uname -m) == 'arm64' ]]; then
-      export BREW="/opt/homebrew/bin/brew"
+        export BREW="/opt/homebrew/bin/brew"
     else
-      export BREW="/usr/local/bin/"
+        export BREW="/usr/local/bin/brew"
     fi
 fi
