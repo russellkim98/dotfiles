@@ -44,9 +44,6 @@ defaults write com.apple.Safari ShowFullURLInSmartSearchField -bool true # Show 
 defaults write com.apple.mail DisableReplyAnimations -bool true            # Disable Mail's reply animations
 defaults write com.apple.mail AddressesIncludeNameOnPasteboard -bool false # Copy email addresses as plain text
 
-# Spotlight settings
-defaults write com.apple.spotlight orderedItems -array '{"enabled" = 1;"name" = "APPLICATIONS";}' # Index only apps
-
 # Terminal settings
 defaults write com.apple.terminal StringEncodings -array 4 # Only use UTF-8 encoding in Terminal.app
 
