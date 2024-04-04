@@ -50,3 +50,6 @@
 	path = zsh/plugins/zsh-completions
 	url = git@github.com:zsh-users/zsh-completions.git
 	ignore = all
+[submodule "config/astronvim"]
+	path = config/astronvim
+	url = git@github.com:russellkim98/astronvim.git
