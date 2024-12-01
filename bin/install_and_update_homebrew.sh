@@ -8,4 +8,6 @@ install_and_update_homebrew() {
 	fi
 	echo "Updating Homebrew..."
 	brew update
+	echo "Upgrading Homebrew ..."
+	brew upgrade
 }
