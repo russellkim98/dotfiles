@@ -15,6 +15,7 @@ fi
 
 # Additional completions
 fpath+="${DOTFILES}/zsh/plugins/zsh-completions/src"
+fpath+="${DOTFILES}/zsh/plugins/zsh-z"
 
 # Enable git-extras completions
 source "${DOTFILES}/tools/git-extras/etc/git-extras-completion.zsh"

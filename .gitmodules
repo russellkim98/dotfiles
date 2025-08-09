@@ -53,3 +53,4 @@
 [submodule "config/astronvim"]
 	path = config/astronvim
 	url = git@github.com:russellkim98/astronvim.git
+	ignore = all
