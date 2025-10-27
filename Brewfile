@@ -1,11 +1,29 @@
+# ------------------------------------------------------------------------------
+# Brewfile: Consolidated List of Tools and Applications
+# ------------------------------------------------------------------------------
+
+# --- Core Command-Line Tools ---
 brew "git"
 brew "zsh"
-brew "pyenv"
-brew "goenv"
-brew "nodenv"
-brew "rbenv"
-brew "jenv"
-brew "spaceship"
-brew "neovim"
-cask "iterm2"
+brew "tmux"
+brew "neovim"   # Prerequisite for AstroNvim
+brew "starship"
 
+# --- Tools for AstroNvim (LSPs, Linters, Formatters) ---
+# These are highly recommended for a full-featured experience.
+brew "lua-language-server" # For Lua development (e.g., configuring Neovim)
+brew "prettier"            # A common code formatter
+brew "stylua"              # A formatter for Lua
+brew "ripgrep"             # For fuzzy finding with Telescope
+brew "lazygit"             # A terminal UI for git, integrates well with AstroNvim
+
+# --- Shell Enhancement Tools ---
+brew "fzf"
+
+# --- GUI Applications (Casks) ---
+cask "iterm2"
+cask "visual-studio-code"
+cask "lm-studio"
+
+# --- Fonts (Casks) ---
+cask "font-hack-nerd-font" # A Nerd Font is REQUIRED for AstroNvim icons

@@ -1,12 +1,24 @@
-# Ignore all .DS_Store files
-*/**.DS_Store
-*.DS_Store
-### Zsh ###
-# autoenv
-.autoenv.zsh
-.autoenv_leave.zsh
-# compiled zsh script
-*/**.zwc
-*/**.zwc.old
+# Backup files created by symlink script
+*.backup.*
 
-Brewfile.lock.json
+# macOS system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# IDE files
+.vscode/
+.idea/
+
+# Local environment files
+.env
+.env.local
