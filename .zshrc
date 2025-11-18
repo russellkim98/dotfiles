@@ -8,59 +8,33 @@ fi
 # Zsh Completion System Initialization
 # =================================================================
 
-
+# Initialize the completion system BEFORE loading plugins (required for fzf-tab)
+autoload -Uz compinit
+compinit
 
 # =================================================================
 # Zsh Plugin Management with Zgenom (Lightweight & Fast)
 # =================================================================
 
 # --- Load Zgenom ---
-# Source the zgenom script if it exists
 if [ -f "${HOME}/.zgenom/zgenom.zsh" ]; then
   source "${HOME}/.zgenom/zgenom.zsh"
 fi
 
-
 # --- Check if we need to regenerate the init script ---
-# This will clone/update plugins and create a static init.zsh
 if ! zgenom saved; then
     echo "Creating new zgenom init script"
 
-    # --- List of Plugins ---
-    # Load completions first
+    # Essential plugins for a clean, fast setup with zoxide
     zgenom load zsh-users/zsh-completions
-
-    # Syntax highlighting
     zgenom load zsh-users/zsh-syntax-highlighting
-
-    # Auto suggestions (type-ahead)
     zgenom load zsh-users/zsh-autosuggestions
-
-    # fzf-tab (replaces standard completion with fzf)
     zgenom load Aloxaf/fzf-tab
 
-    # Abbreviation manager
-    zgenom load olets/zsh-abbr
-
-    # Automatic environment loading
-    zgenom load zsh-users/zsh-autoenv
-
-    # Auto-closing quotes and brackets
-    zgenom load ael-code/zsh-autopair
-
-
-    # zoxide for frecent directory jumping (fzf compatible)
-    # Do not load 'rupa/z' if using zoxide
-
-    # Save the plugin list to the init script
     zgenom save
 fi
 
-# Initialize the completion system after plugins are loaded
-autoload -Uz compinit
-compinit
-
-# --- zoxide init (after compinit) ---
+# --- zoxide init ---
 if command -v zoxide &> /dev/null; then
     eval "$(zoxide init zsh)"
 fi
@@ -110,33 +84,23 @@ preview() {
 }
 
 # =================================================================
-# FZF Configuration for File Previews and zoxide integration
+# FZF Configuration
 # =================================================================
 
-# Configure fzf to use bat for file previews
 if command -v fzf &> /dev/null && command -v bat &> /dev/null; then
     export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-range=:500 {}'"
-    export FZF_ALT_C_OPTS="--preview 'tree -C {} | head -200'"
+    export FZF_ALT_C_OPTS="--preview 'eza --tree --icons --color=always {} | head -200'"
 fi
-
-# zoxide provides 'zi' for interactive fzf search
-# Usage: 
-#   z <keyword>       - jump to directory
-#   zi                - interactive fzf search (recommended)
-#
-# Note: Regular tab completion with 'z' may not work due to fzf-tab compatibility.
-# Use 'zi' for the best fzf experience.
 
 
 # =================================================================
 # Miscellaneous Settings
 # =================================================================
 alias v="nvim"
-alias z="zi"
 # Eza settings and aliases
-alias ls="eza -a --icons"
-alias ll="eza -l --icons --git"
-alias la="eza -la --icons --git"
+alias ls="eza --icons"
+alias ll="eza -la --icons --git"
+alias la="eza -a --icons --git"
 alias lt="eza -T --icons"
 
 export EDITOR="nvim"

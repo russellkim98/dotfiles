@@ -56,7 +56,7 @@ create_symlink() {
 # --- Symlink Configuration Files ---
 
 # Neovim configuration (AstroNvim)
-create_symlink "$SCRIPT_DIR/astronvim_user_config" "$HOME/.config/nvim"
+create_symlink "$SCRIPT_DIR/astronvim_template" "$HOME/.config/nvim"
 
 
 # Add other dotfiles here as you create them:

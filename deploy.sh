@@ -113,10 +113,9 @@ create_symlink() {
 }
 
 # Symlink Neovim configuration (AstroNvim)
-if [ -d "$SCRIPT_DIR/template" ]; then
-  create_symlink "$SCRIPT_DIR/template" "$HOME/.config/nvim"
+if [ -d "$SCRIPT_DIR/astronvim_template" ]; then
+  create_symlink "$SCRIPT_DIR/astronvim_template" "$HOME/.config/nvim"
 fi
-
 
 # Create ~/.zshrc that sources the repo .zshrc and sets Homebrew path
 info "Setting up ~/.zshrc to source dotfiles/.zshrc and set Homebrew path..."
