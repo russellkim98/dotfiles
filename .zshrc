@@ -109,3 +109,18 @@ if command -v fzf &> /dev/null && command -v bat &> /dev/null; then
     export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-range=:500 {}'"
     export FZF_ALT_C_OPTS="--preview 'tree -C {} | head -200'"
 fi
+
+
+# =================================================================
+# Miscellaneous Settings
+# =================================================================
+alias v="nvim"
+
+# Eza settings and aliases
+alias ls="eza -a --icons"
+alias ll="eza -l --icons --git"
+alias la="eza -la --icons --git"
+alias lt="eza -T --icons"
+
+export EDITOR="nvim"
+export VISUAL="nvim"

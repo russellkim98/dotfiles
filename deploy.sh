@@ -53,10 +53,18 @@ else
   info "No .macos file found. Skipping."
 fi
 
-# --- 6. Install all packages from Brewfile ---
+# --- 6. Update Homebrew and Install from Brewfile ---
+info "Updating Homebrew..."
+if brew update; then
+  success "Homebrew updated successfully."
+else
+  fail "Homebrew update failed."
+fi
+
 info "Installing packages from Brewfile..."
 if [ -f "$SCRIPT_DIR/Brewfile" ]; then
-  if brew bundle --file="$SCRIPT_DIR/Brewfile"; then
+  # Use --verbose to see detailed progress
+  if brew bundle --file="$SCRIPT_DIR/Brewfile" --verbose; then
     success "Brewfile packages installed successfully."
   else
     fail "Brew bundle command failed. Please check the output above."
@@ -64,10 +72,6 @@ if [ -f "$SCRIPT_DIR/Brewfile" ]; then
 else
   info "No Brewfile found. Skipping."
 fi
-
-info "Setting up Global Git defaults."
-git config --global user.name "Russell Kim"
-git config --global user.email "russellkim98@icloud.com"
 
 # --- 7. Create symbolic links for dotfiles ---
 info "Setting up symbolic links for dotfiles..."
@@ -105,10 +109,24 @@ if [ -d "$SCRIPT_DIR/astronvim_user_config" ]; then
   create_symlink "$SCRIPT_DIR/astronvim_user_config" "$HOME/.config/nvim"
 fi
 
-# Symlink .zshrc
-if [ -f "$SCRIPT_DIR/.zshrc" ]; then
-  create_symlink "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"
+
+# Create ~/.zshrc that sources the repo .zshrc and sets Homebrew path
+info "Setting up ~/.zshrc to source dotfiles/.zshrc and set Homebrew path..."
+ZSHRC_PATH="$HOME/.zshrc"
+REPO_ZSHRC="$SCRIPT_DIR/.zshrc"
+
+# Backup existing ~/.zshrc if it exists and is not a symlink
+if [ -e "$ZSHRC_PATH" ] && [ ! -L "$ZSHRC_PATH" ]; then
+  mv "$ZSHRC_PATH" "${ZSHRC_PATH}.backup.$(date +%Y%m%d_%H%M%S)"
+  info "Backed up existing $ZSHRC_PATH"
 fi
+
+# Write new ~/.zshrc
+cat > "$ZSHRC_PATH" <<EOF
+export PATH="/opt/homebrew/bin:$PATH"
+source "$REPO_ZSHRC"
+EOF
+success "~/.zshrc created to source $REPO_ZSHRC and set Homebrew path."
 
 # Add other dotfiles here as needed
 # Examples:
