@@ -132,7 +132,7 @@ fi
 # Miscellaneous Settings
 # =================================================================
 alias v="nvim"
-
+alias z="zi"
 # Eza settings and aliases
 alias ls="eza -a --icons"
 alias ll="eza -l --icons --git"
