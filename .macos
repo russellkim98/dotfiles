@@ -29,7 +29,7 @@ defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
 # KeyRepeat: Controls the rate of repetition (2 is fast, 15 is slow)
 # InitialKeyRepeat: Controls the delay before repetition starts (15 is fast, 120 is slow)
 # The values 2 and 15 are common for a highly responsive feel.
-# defaults write NSGlobalDomain KeyRepeat -int 2
-# defaults write NSGlobalDomain InitialKeyRepeat -int 15
+defaults write NSGlobalDomain KeyRepeat -int 2
+defaults write NSGlobalDomain InitialKeyRepeat -int 15
 
 echo "macOS settings updated. Log out and log back in for all changes to take effect."

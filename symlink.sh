@@ -58,8 +58,6 @@ create_symlink() {
 # Neovim configuration (AstroNvim)
 create_symlink "$SCRIPT_DIR/astronvim_user_config" "$HOME/.config/nvim"
 
-# Zsh configuration
-create_symlink "$SCRIPT_DIR/.zshrc" "$HOME/.zshrc"
 
 # Add other dotfiles here as you create them:
 # create_symlink "$SCRIPT_DIR/.gitconfig" "$HOME/.gitconfig"

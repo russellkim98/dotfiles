@@ -1,3 +1,17 @@
+# Brewfile: This file defines a consolidated list of Homebrew packages and casks to be installed.
+# 
+# Sections:
+# - Core Command-Line Tools: Essential utilities for development and shell usage.
+# - Tools for AstroNvim: Language servers, linters, and formatters recommended for a full-featured Neovim setup.
+# - Shell Enhancement Tools: Utilities to enhance shell productivity and navigation.
+# - Fonts (Casks): Recommended fonts for improved terminal and editor appearance.
+#
+# Usage:
+#   Run `brew bundle` in the directory containing this Brewfile to install all listed packages and casks.
+#
+# Notes:
+# - Duplicate entries (e.g., "eza") may be consolidated as needed.
+# - Comments indicate the purpose of each tool and any relevant prerequisites.
 # ------------------------------------------------------------------------------
 # Brewfile: Consolidated List of Tools and Applications
 # ------------------------------------------------------------------------------
@@ -24,6 +38,7 @@ brew "eza"                 # ls replacement with better formatting (successor to
 brew "tree"                # Directory tree visualization
 brew "uv"                  # Python packaging and virtual environment management
 brew "eza"                 # Modern replacement for 'ls' command
+brew "zoxide"              # Utility to provide FZF functionality
 
 # --- Fonts (Casks) ---
 cask "font-fira-code-nerd-font"

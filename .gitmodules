@@ -1,0 +1,3 @@
+[submodule "astronvim_template"]
+	path = astronvim_template
+	url = git@github.com:AstroNvim/template.git

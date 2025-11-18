@@ -8,9 +8,7 @@ fi
 # Zsh Completion System Initialization
 # =================================================================
 
-# Initialize the completion system
-autoload -Uz compinit
-compinit
+
 
 # =================================================================
 # Zsh Plugin Management with Zgenom (Lightweight & Fast)
@@ -21,6 +19,7 @@ compinit
 if [ -f "${HOME}/.zgenom/zgenom.zsh" ]; then
   source "${HOME}/.zgenom/zgenom.zsh"
 fi
+
 
 # --- Check if we need to regenerate the init script ---
 # This will clone/update plugins and create a static init.zsh
@@ -49,11 +48,21 @@ if ! zgenom saved; then
     # Auto-closing quotes and brackets
     zgenom load ael-code/zsh-autopair
 
-    # 'z' for frecent directory jumping
-    zgenom load "rupa/z"
+
+    # zoxide for frecent directory jumping (fzf compatible)
+    # Do not load 'rupa/z' if using zoxide
 
     # Save the plugin list to the init script
     zgenom save
+fi
+
+# Initialize the completion system after plugins are loaded
+autoload -Uz compinit
+compinit
+
+# --- zoxide init (after compinit) ---
+if command -v zoxide &> /dev/null; then
+    eval "$(zoxide init zsh)"
 fi
 
 # =================================================================
@@ -101,7 +110,7 @@ preview() {
 }
 
 # =================================================================
-# FZF Configuration for File Previews
+# FZF Configuration for File Previews and zoxide integration
 # =================================================================
 
 # Configure fzf to use bat for file previews
@@ -109,6 +118,14 @@ if command -v fzf &> /dev/null && command -v bat &> /dev/null; then
     export FZF_CTRL_T_OPTS="--preview 'bat --color=always --style=numbers --line-range=:500 {}'"
     export FZF_ALT_C_OPTS="--preview 'tree -C {} | head -200'"
 fi
+
+# zoxide provides 'zi' for interactive fzf search
+# Usage: 
+#   z <keyword>       - jump to directory
+#   zi                - interactive fzf search (recommended)
+#
+# Note: Regular tab completion with 'z' may not work due to fzf-tab compatibility.
+# Use 'zi' for the best fzf experience.
 
 
 # =================================================================

@@ -73,7 +73,15 @@ else
   info "No Brewfile found. Skipping."
 fi
 
-# --- 7. Create symbolic links for dotfiles ---
+# --- 7. Initialize and update git submodules ---
+info "Initializing and updating git submodules..."
+if git -C "$SCRIPT_DIR" submodule update --init --recursive; then
+  success "Git submodules updated successfully."
+else
+  info "No git submodules found or update failed. Continuing..."
+fi
+
+# --- 8. Create symbolic links for dotfiles ---
 info "Setting up symbolic links for dotfiles..."
 
 # Function to create symlink with backup
@@ -105,8 +113,8 @@ create_symlink() {
 }
 
 # Symlink Neovim configuration (AstroNvim)
-if [ -d "$SCRIPT_DIR/astronvim_user_config" ]; then
-  create_symlink "$SCRIPT_DIR/astronvim_user_config" "$HOME/.config/nvim"
+if [ -d "$SCRIPT_DIR/template" ]; then
+  create_symlink "$SCRIPT_DIR/template" "$HOME/.config/nvim"
 fi
 
 
