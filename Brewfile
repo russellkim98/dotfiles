@@ -34,7 +34,6 @@ brew "lazygit"             # A terminal UI for git, integrates well with AstroNv
 # --- Shell Enhancement Tools ---
 brew "fzf"
 brew "bat"                 # Cat replacement with syntax highlighting
-brew "eza"                 # ls replacement with better formatting (successor to exa)
 brew "tree"                # Directory tree visualization
 brew "uv"                  # Python packaging and virtual environment management
 brew "eza"                 # Modern replacement for 'ls' command
