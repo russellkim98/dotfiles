@@ -1,14 +1,6 @@
-# 🌐 Russell's Dotfiles (Atlas-Managed)
-
-> **"Isomorphic Structure for a Chaotic Mind."**
+# Russell's Dotfiles
 
 This repository contains the configuration files (dotfiles) that define my macOS development environment. It is designed to be **robust, automated, and self-healing**.
-
-## 🧠 Philosophy
-
-* **Infrastructure as Code:** My machine state is defined here, not manually.
-* **Universal Linking:** We do not maintain manual lists of files to symlink. If it exists here, it links to `$HOME`.
-* **Automated Maintenance:** Submodules update themselves daily via GitHub Actions.
 
 ## 🛠️ Setup (Fresh Machine)
 
@@ -42,7 +34,7 @@ This repository contains the configuration files (dotfiles) that define my macOS
 
 ## 📂 Structure
 
-* **`symlink.sh`**: The brain. Scans the repo and symlinks everything to `$HOME`. Smart enough to ignore git files and handle backups.
+* **`symlink.sh`**: Scans the repo and symlinks everything to `$HOME`. Smart enough to ignore git files and handle backups.
 * **`.zshrc`**: The shell configuration. Sources itself cleanly.
 * **`Brewfile`**: The inventory of all installed software.
 * **`.macos`**: Minimalist "defaults write" settings for UI tweaks.
@@ -51,7 +43,6 @@ This repository contains the configuration files (dotfiles) that define my macOS
 ## 🤖 Automation
 
 * **Daily Updates:** A GitHub Action (`.github/workflows/submodules.yml`) runs daily to fetch the latest upstream changes for submodules (like AstroNvim) and commits them back to this repo.
-* **Atlas:** This repo is maintained by Atlas (AI Agent).
 
 ---
 *Maintained by Atlas 🌍*
