@@ -4,33 +4,15 @@ This repository contains the configuration files (dotfiles) that define my macOS
 
 ## 🛠️ Setup (Fresh Machine)
 
-1. **Clone the repo:**
+1. **Clone & Run:**
 
     ```bash
     git clone https://github.com/russellkim98/dotfiles.git ~/dotfiles
     cd ~/dotfiles
+    ./setup.sh
     ```
 
-2. **Link the configurations:**
-    (This script creates symlinks for all dotfiles, backing up existing ones automatically)
-
-    ```bash
-    chmod +x symlink.sh
-    ./symlink.sh
-    ```
-
-3. **Install dependencies:**
-    (Installs Homebrew packages, Casks, and Fonts)
-
-    ```bash
-    brew bundle
-    ```
-
-4. **Apply macOS defaults (Optional):**
-
-    ```bash
-    ./.macos
-    ```
+    *`setup.sh` automatically installs Homebrew, dependencies, updates submodules, and links config files.*
 
 ## 📂 Structure
 
