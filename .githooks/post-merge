@@ -1,0 +1,28 @@
+#!/bin/zsh
+
+# 1. Update Submodules
+echo "🔄 Hook: Updating submodules..."
+git submodule update --init --recursive
+
+# 2. Re-run Symlinks
+echo "🔗 Hook: Refreshing symlinks..."
+./symlink.sh
+
+# 3. Detect changes
+changed_files="$(git diff-tree -r --name-only --no-commit-id HEAD@{1} HEAD)"
+
+# 4. Update Zgenom plugins if .zshrc changed
+if echo "$changed_files" | grep -q ".zshrc"; then
+    if [ -d "$HOME/.zgenom" ]; then
+        echo "🔌 Hook: .zshrc changed. Updating Zsh plugins..."
+        zsh -i -c "zgenom update"
+    fi
+fi
+
+# 5. Check for Brewfile changes
+if echo "$changed_files" | grep -q "Brewfile"; then
+    echo "🍺 [1;33mNOTICE: Brewfile has changed.[0m"
+    echo "   Run [1;32mbrew bundle[0m or [1;32m./setup.sh[0m to install new packages."
+fi
+
+echo "✅ Update complete."

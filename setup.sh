@@ -44,10 +44,20 @@ brew upgrade
 brew bundle --file="$SCRIPT_DIR/Brewfile" --verbose
 
 # 3. Update Submodules
-info "🔄 Updating git submodules..."
+info "🔄 Updating git submodules and hooks..."
 git submodule update --init --recursive
+git config core.hooksPath .githooks
 
-# 4. Link Dotfiles
+# 4. Install/Update Zgenom (Zsh Plugin Manager)
+if [ ! -d "$HOME/.zgenom" ]; then
+  info "🚀 Installing zgenom..."
+  git clone https://github.com/jandamm/zgenom.git "$HOME/.zgenom"
+fi
+
+info "🔌 Updating Zsh plugins (zgenom)..."
+zsh -i -c "zgenom selfupdate && zgenom update"
+
+# 5. Link Dotfiles
 info "🔗 Linking dotfiles..."
 chmod +x "$SCRIPT_DIR/symlink.sh"
 "$SCRIPT_DIR/symlink.sh"
