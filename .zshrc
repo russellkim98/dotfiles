@@ -105,3 +105,9 @@ alias lt="eza -T --icons"
 
 export EDITOR="nvim"
 export VISUAL="nvim"
+
+# --- Local Override ---
+# This file is ignored by Git. Use it for local secrets/exports.
+if [ -f "$HOME/.zshrc.local" ]; then
+    source "$HOME/.zshrc.local"
+fi

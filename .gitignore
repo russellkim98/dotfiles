@@ -22,3 +22,4 @@ Thumbs.db
 # Local environment files
 .env
 .env.local
+.zshrc.local
