@@ -19,19 +19,19 @@ compinit
 # --- Load Zgenom ---
 if [ -f "${HOME}/.zgenom/zgenom.zsh" ]; then
   source "${HOME}/.zgenom/zgenom.zsh"
-fi
 
-# --- Check if we need to regenerate the init script ---
-if ! zgenom saved; then
-    echo "Creating new zgenom init script"
+  # --- Check if we need to regenerate the init script ---
+  if ! zgenom saved; then
+      echo "Creating new zgenom init script"
 
-    # Essential plugins for a clean, fast setup with zoxide
-    zgenom load zsh-users/zsh-completions
-    zgenom load zsh-users/zsh-syntax-highlighting
-    zgenom load zsh-users/zsh-autosuggestions
-    zgenom load Aloxaf/fzf-tab
+      # Essential plugins for a clean, fast setup with zoxide
+      zgenom load zsh-users/zsh-completions
+      zgenom load zsh-users/zsh-syntax-highlighting
+      zgenom load zsh-users/zsh-autosuggestions
+      zgenom load Aloxaf/fzf-tab
 
-    zgenom save
+      zgenom save
+  fi
 fi
 
 # --- zoxide init ---
