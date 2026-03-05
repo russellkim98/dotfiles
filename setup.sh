@@ -48,7 +48,12 @@ info "🔄 Updating git submodules and hooks..."
 git submodule update --init --recursive
 git config core.hooksPath .githooks
 
-# 4. Install/Update Zgenom (Zsh Plugin Manager)
+# 4. Link Dotfiles (before zgenom so .zshrc is in place for interactive zsh)
+info "🔗 Linking dotfiles..."
+chmod +x "$SCRIPT_DIR/symlink.sh"
+"$SCRIPT_DIR/symlink.sh"
+
+# 5. Install/Update Zgenom (Zsh Plugin Manager)
 if [ ! -d "$HOME/.zgenom" ]; then
   info "🚀 Installing zgenom..."
   git clone https://github.com/jandamm/zgenom.git "$HOME/.zgenom"
@@ -57,12 +62,28 @@ fi
 info "🔌 Updating Zsh plugins (zgenom)..."
 zsh -i -c "zgenom selfupdate && zgenom update"
 
-# 5. Link Dotfiles
-info "🔗 Linking dotfiles..."
-chmod +x "$SCRIPT_DIR/symlink.sh"
-"$SCRIPT_DIR/symlink.sh"
+# 6. iTerm2 Profile
+if [ -d "/Applications/iTerm.app" ]; then
+    info "🎨 Installing iTerm2 profile..."
+    ITERM_PROFILES_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+    mkdir -p "$ITERM_PROFILES_DIR"
 
-# 5. MacOS Defaults (Optional)
+    # Wrap the profile JSON in Dynamic Profiles format
+    python3 -c "
+import json
+with open('$SCRIPT_DIR/iterm2-theme.json') as f:
+    profile = json.load(f)
+profile['Dynamic Profile Parent Name'] = 'Default'
+print(json.dumps({'Profiles': [profile]}, indent=2))
+" > "$ITERM_PROFILES_DIR/dotfiles-profile.json"
+
+    # Set as default profile
+    defaults write com.googlecode.iterm2 "Default Bookmark Guid" "E7BCCD8D-730C-425D-A5DE-611342D95F3D"
+
+    success "iTerm2 profile installed."
+fi
+
+# 7. MacOS Defaults (Optional)
 if [ -f "$SCRIPT_DIR/.macos" ]; then
     info "🍎 Applying macOS defaults..."
     chmod +x "$SCRIPT_DIR/.macos"
