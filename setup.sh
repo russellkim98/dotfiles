@@ -53,6 +53,13 @@ info "🔗 Linking dotfiles..."
 chmod +x "$SCRIPT_DIR/symlink.sh"
 "$SCRIPT_DIR/symlink.sh"
 
+# 4b. Create ~/.zshrc stub (not symlinked, so local edits don't touch the repo)
+if [ ! -f "$HOME/.zshrc" ]; then
+  info "📝 Creating ~/.zshrc..."
+  echo "source \"$SCRIPT_DIR/.zshrc\"" > "$HOME/.zshrc"
+  success "Created ~/.zshrc (sources $SCRIPT_DIR/.zshrc)"
+fi
+
 # 5. Install/Update Zgenom (Zsh Plugin Manager)
 if [ ! -d "$HOME/.zgenom" ]; then
   info "🚀 Installing zgenom..."

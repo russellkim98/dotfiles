@@ -20,7 +20,7 @@ fi
 
 # --- Configuration ---
 # Files/Folders to completely ignore
-IGNORES=("." ".." ".git" ".gitmodules" ".gitignore" ".DS_Store" ".macos" "README.md" "LICENSE" "symlink.sh" "deploy.sh" "Brewfile" "GEMINI.md" ".github" "astronvim_template" "nvim-custom")
+IGNORES=("." ".." ".git" ".gitmodules" ".gitignore" ".DS_Store" ".macos" "README.md" "LICENSE" "symlink.sh" "deploy.sh" "Brewfile" "GEMINI.md" ".github" "astronvim_template" "nvim-custom" ".zshrc")
 
 # Explicit mapping for things that don't map 1:1 (Source -> Target relative to HOME)
 # Format: "source_in_repo:target_path_from_home"
