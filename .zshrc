@@ -1,9 +1,16 @@
-eval "$(starship init zsh)"
+# --- Homebrew Shellenv ---
+if [[ $(uname -m) == 'arm64' ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null)"
+else
+  eval "$(/usr/local/bin/brew shellenv 2>/dev/null)"
+fi
+
 # --- iTerm2 Shell Integration ---
 # This must be sourced for features like marks, badges, and directory tracking.
 if [ -f "${HOME}/.iterm2_shell_integration.zsh" ]; then
   source "${HOME}/.iterm2_shell_integration.zsh"
 fi
+
 # =================================================================
 # Zsh Completion System Initialization
 # =================================================================
@@ -26,9 +33,9 @@ if [ -f "${HOME}/.zgenom/zgenom.zsh" ]; then
 
       # Essential plugins for a clean, fast setup with zoxide
       zgenom load zsh-users/zsh-completions
-      zgenom load zsh-users/zsh-syntax-highlighting
-      zgenom load zsh-users/zsh-autosuggestions
       zgenom load Aloxaf/fzf-tab
+      zgenom load zsh-users/zsh-autosuggestions
+      zgenom load zsh-users/zsh-syntax-highlighting
 
       zgenom save
   fi
@@ -64,8 +71,9 @@ fi
 # Better directory listing
 if command -v eza &> /dev/null; then
     alias ls="eza --icons"
-    alias ll="eza -l --icons --git"
-    alias la="eza -la --icons --git"
+    alias ll="eza -la --icons --git"
+    alias la="eza -a --icons --git"
+    alias lt="eza -T --icons"
     alias tree="eza --tree --icons"
 fi
 
@@ -97,11 +105,13 @@ fi
 # Miscellaneous Settings
 # =================================================================
 alias v="nvim"
-# Eza settings and aliases
-alias ls="eza --icons"
-alias ll="eza -la --icons --git"
-alias la="eza -a --icons --git"
-alias lt="eza -T --icons"
 
 export EDITOR="nvim"
 export VISUAL="nvim"
+
+# =================================================================
+# Prompt Initialization
+# =================================================================
+if command -v starship &> /dev/null; then
+    eval "$(starship init zsh)"
+fi
