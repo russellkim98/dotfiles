@@ -2,7 +2,7 @@
 # setup.sh - The One-Click Installer
 # Installs Xcode tools, Homebrew, packages, updates submodules, and links dotfiles.
 
-set -e
+set -euo pipefail
 
 # --- Helper Functions ---
 info() { printf "\033[1;34m%s\033[0m\n" "$1"; }
@@ -27,7 +27,7 @@ fi
 # 1. Install Homebrew (if missing)
 if ! command -v brew &> /dev/null; then
   info "🍺 Installing Homebrew..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
   
   # Add brew to PATH for this session (Apple Silicon vs Intel logic)
   if [[ $(uname -m) == 'arm64' ]]; then
@@ -67,7 +67,7 @@ if [ ! -d "$HOME/.zgenom" ]; then
 fi
 
 info "🔌 Updating Zsh plugins (zgenom)..."
-zsh -i -c "zgenom selfupdate && zgenom update"
+zsh -c "source $HOME/.zshrc && zgenom selfupdate && zgenom update"
 
 # 6. iTerm2 Profile
 if [ -d "/Applications/iTerm.app" ]; then
