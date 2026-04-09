@@ -1,4 +1,0 @@
-[submodule "astronvim_template"]
-	path = astronvim_template
-	url = https://github.com/AstroNvim/template.git
-	ignore = dirty

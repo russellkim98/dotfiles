@@ -43,9 +43,8 @@ brew update
 brew upgrade
 brew bundle --file="$SCRIPT_DIR/Brewfile" --verbose
 
-# 3. Update Submodules
-info "🔄 Updating git submodules and hooks..."
-git submodule update --init --recursive
+# 3. Configure git hooks
+info "🔄 Configuring git hooks..."
 git config core.hooksPath .githooks
 
 # 4. Link Dotfiles (before zgenom so .zshrc is in place for interactive zsh)

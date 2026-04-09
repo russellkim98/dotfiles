@@ -20,7 +20,7 @@ fi
 
 # --- Configuration ---
 # Files/Folders to completely ignore
-IGNORES=("." ".." ".git" ".githooks" ".gitmodules" ".gitignore" ".DS_Store" ".macos" "README.md" "LICENSE" "symlink.sh" "deploy.sh" "Brewfile" "GEMINI.md" ".github" "astronvim_template" "nvim-custom" ".zshrc")
+IGNORES=("." ".." ".git" ".githooks" ".gitignore" ".DS_Store" ".macos" "README.md" "LICENSE" "symlink.sh" "deploy.sh" "Brewfile" "GEMINI.md" ".github" "astronvim_template" ".zshrc")
 
 # Explicit mapping for things that don't map 1:1 (Source -> Target relative to HOME)
 # Format: "source_in_repo:target_path_from_home"
@@ -99,14 +99,6 @@ for src_name in "${(@k)MAPPINGS}"; do
     warning "Skipping mapping: $src_name (not found in repo)"
   fi
 done
-
-# 3. Custom Neovim plugins (overlaid on top of AstroNvim template)
-if [ -d "$SCRIPT_DIR/nvim-custom/plugins" ]; then
-  for plugin_file in "$SCRIPT_DIR/nvim-custom/plugins"/*.lua; do
-    [ -f "$plugin_file" ] || continue
-    link_file "$plugin_file" "$HOME/.config/nvim/lua/plugins/$(basename "$plugin_file")"
-  done
-fi
 
 if $DRY_RUN; then
   success "✅ Dry run complete."

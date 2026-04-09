@@ -1,10 +1,6 @@
 #!/bin/zsh
 
-# 1. Update Submodules
-echo "🔄 Hook: Updating submodules..."
-git submodule update --init --recursive
-
-# 2. Re-run Symlinks
+# 1. Re-run Symlinks
 echo "🔗 Hook: Refreshing symlinks..."
 ./symlink.sh
 
