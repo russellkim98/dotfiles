@@ -12,7 +12,7 @@ warning() { printf "\033[1;33m%s\033[0m\n" "$1"; }
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DRY_RUN=false
 
-if [[ "$1" == "--dry-run" ]]; then
+if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=true
   info "🔎 STARTING DRY RUN (No changes will be made)"
 fi
