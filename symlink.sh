@@ -20,20 +20,13 @@ fi
 
 # --- Configuration ---
 # Files/Folders to completely ignore
-IGNORES=("." ".." ".git" ".githooks" ".gitignore" ".DS_Store" ".macos" "README.md" "LICENSE" "symlink.sh" "deploy.sh" "Brewfile" "GEMINI.md" ".github" "astronvim_template" ".zshrc")
+declare -A IGNORES
+IGNORES=( [.]=1 [..]=1 [.git]=1 [.githooks]=1 [.gitignore]=1 [.DS_Store]=1 [.macos]=1 [README.md]=1 [LICENSE]=1 [symlink.sh]=1 [deploy.sh]=1 [Brewfile]=1 [GEMINI.md]=1 [.github]=1 [astronvim_template]=1 [.zshrc]=1 )
 
 # Explicit mapping for things that don't map 1:1 (Source -> Target relative to HOME)
 # Format: "source_in_repo:target_path_from_home"
 declare -A MAPPINGS
 MAPPINGS[astronvim_template]=".config/nvim"
-
-# Function to check if array contains element
-containsElement() {
-  local e match="$1"
-  shift
-  for e; do [[ "$e" == "$match" ]] && return 0; done
-  return 1
-}
 
 # --- Core Linker Logic ---
 link_file() {
@@ -78,7 +71,7 @@ for src_path in "$SCRIPT_DIR"/.* "$SCRIPT_DIR"/*; do
   name=$(basename "$src_path")
 
   # Skip ignored files
-  if containsElement "$name" "${IGNORES[@]}"; then
+  if (( ${+IGNORES[$name]} )); then
     continue
   fi
 
