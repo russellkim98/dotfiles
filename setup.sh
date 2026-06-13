@@ -76,12 +76,12 @@ if [ -d "/Applications/iTerm.app" ]; then
 
     # Wrap the profile JSON in Dynamic Profiles format
     python3 -c "
-import json
-with open('$SCRIPT_DIR/iterm2-theme.json') as f:
+import sys, json
+with open(sys.argv[1]) as f:
     profile = json.load(f)
 profile['Dynamic Profile Parent Name'] = 'Default'
 print(json.dumps({'Profiles': [profile]}, indent=2))
-" > "$ITERM_PROFILES_DIR/dotfiles-profile.json"
+" "$SCRIPT_DIR/iterm2-theme.json" > "$ITERM_PROFILES_DIR/dotfiles-profile.json"
 
     # Set as default profile
     defaults write com.googlecode.iterm2 "Default Bookmark Guid" "E7BCCD8D-730C-425D-A5DE-611342D95F3D"
