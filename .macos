@@ -3,7 +3,8 @@
 # Concise and Less Intrusive macOS Defaults Script
 
 # Close any open System Preferences panes so changes can take effect immediately
-osascript -e 'tell application "System Preferences" to quit'
+osascript -e 'if application "System Preferences" is running then tell application "System Preferences" to quit'
+osascript -e 'if application "System Settings" is running then tell application "System Settings" to quit'
 
 # --- Essential Quality-of-Life UI Tweaks ---
 
