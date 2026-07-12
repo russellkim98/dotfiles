@@ -9,14 +9,15 @@ source "$SCRIPT_DIR/lib/utils.sh"
 
 DRY_RUN=false
 
-if [[ "$1" == "--dry-run" ]]; then
+if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=true
   info "🔎 STARTING DRY RUN (No changes will be made)"
 fi
 
 # --- Configuration ---
 # Files/Folders to completely ignore
-IGNORES=("." ".." ".git" ".githooks" ".gitignore" ".DS_Store" ".macos" "README.md" "LICENSE" "symlink.sh" "deploy.sh" "Brewfile" "GEMINI.md" ".github" "astronvim_template" ".zshrc" "lib" "tests")
+declare -A IGNORES
+IGNORES=( [.]=1 [..]=1 [.git]=1 [.githooks]=1 [.gitignore]=1 [.DS_Store]=1 [.macos]=1 [README.md]=1 [LICENSE]=1 [symlink.sh]=1 [deploy.sh]=1 [Brewfile]=1 [GEMINI.md]=1 [.github]=1 [astronvim_template]=1 [.zshrc]=1 [lib]=1 [tests]=1 )
 
 # Explicit mapping for things that don't map 1:1 (Source -> Target relative to HOME)
 # Format: "source_in_repo:target_path_from_home"
@@ -66,7 +67,7 @@ for src_path in "$SCRIPT_DIR"/.* "$SCRIPT_DIR"/*; do
   name=$(basename "$src_path")
 
   # Skip ignored files
-  if containsElement "$name" "${IGNORES[@]}"; then
+  if (( ${+IGNORES[$name]} )); then
     continue
   fi
 

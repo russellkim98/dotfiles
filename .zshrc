@@ -1,3 +1,9 @@
+# =================================================================
+# Locale Configuration (Ensure English messages for git and commands)
+# =================================================================
+export LANG="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
+
 # --- Homebrew Shellenv ---
 if [[ $(uname -m) == 'arm64' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null)"
@@ -115,3 +121,10 @@ export VISUAL="nvim"
 if command -v starship &> /dev/null; then
     eval "$(starship init zsh)"
 fi
+
+
+# Added by Antigravity CLI installer
+export PATH="/Users/russellkim98/.local/bin:$PATH"
+
+# Added by Antigravity IDE
+export PATH="/Users/russellkim98/.antigravity-ide/antigravity-ide/bin:$PATH"

@@ -22,6 +22,8 @@ brew "zsh"
 brew "tmux"
 brew "neovim"   # Prerequisite for AstroNvim
 brew "starship"
+brew "gh"       # GitHub CLI
+brew "go"       # Go programming language
 
 # --- Tools for AstroNvim (LSPs, Linters, Formatters) ---
 # These are highly recommended for a full-featured experience.
@@ -38,6 +40,15 @@ brew "tree"                # Directory tree visualization
 brew "uv"                  # Python packaging and virtual environment management
 brew "eza"                 # Modern replacement for 'ls' command
 brew "zoxide"              # Utility to provide FZF functionality
+brew "z"                   # Directory jumper
+brew "zsh-completions"     # Additional completions for zsh
+brew "zsh-autosuggestions" # Fish-like autosuggestions for zsh
+brew "zsh-syntax-highlighting" # Syntax highlighting for the zsh command line
 
-# --- Fonts (Casks) ---
+# --- Fonts & Applications (Casks) ---
 cask "font-fira-code-nerd-font"
+cask "font-hack-nerd-font"
+cask "iterm2"
+cask "lm-studio"
+cask "rectangle"
+cask "visual-studio-code"
