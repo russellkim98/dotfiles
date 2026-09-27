@@ -587,29 +587,28 @@ class RefreshDashboard:
             expand=True,
             show_header=True,
             header_style="bold dim",
-            pad_edge=True,
-            collapse_padding=True,
+            pad_edge=False,
+            padding=(0, 1),
         )
-        task_table.add_column("", width=2, no_wrap=True)
-        task_table.add_column("Task", width=17, no_wrap=True)
-        task_table.add_column("Stage", width=9, no_wrap=True)
-        task_table.add_column("Progress", width=22, no_wrap=True)
-        task_table.add_column("%", width=5, justify="right", no_wrap=True)
-        task_table.add_column("Time", width=7, justify="right", no_wrap=True)
-        task_table.add_column("Live Status / Output", ratio=1, no_wrap=True, overflow="ellipsis")
+        task_table.add_column("", no_wrap=True)
+        task_table.add_column("Task", width=16, no_wrap=True)
+        task_table.add_column("Progress", width=18, no_wrap=True)
+        task_table.add_column("Done", justify="right", no_wrap=True)
+        task_table.add_column("Time", justify="right", no_wrap=True)
+        task_table.add_column("Status / Live Output", ratio=1, min_width=18, no_wrap=True, overflow="ellipsis")
 
         for t in self.tasks:
             if t.status == "done":
                 icon: RenderableType = Text("✓", style="bold bright_green")
                 name_txt = Text(t.name, style="white")
-                bar = ProgressBar(total=100.0, completed=100.0, width=20, complete_style="green", finished_style="bright_green")
+                bar = ProgressBar(total=100.0, completed=100.0, width=18, complete_style="green", finished_style="bright_green")
                 pct_txt = Text("100%", style="green")
                 time_txt = Text(f"{t.elapsed:4.1f}s", style="dim")
                 detail_txt = Text(t.last_line or "Complete", style="dim")
             elif t.status == "failed":
                 icon = Text("✗", style="bold bright_red")
                 name_txt = Text(t.name, style="bold bright_red")
-                bar = ProgressBar(total=100.0, completed=max(10.0, t.progress), width=20, complete_style="red")
+                bar = ProgressBar(total=100.0, completed=max(10.0, t.progress), width=18, complete_style="red")
                 pct_txt = Text(f"{t.progress:3.0f}%", style="red")
                 time_txt = Text(f"{t.elapsed:4.1f}s", style="red")
                 detail_txt = Text(t.last_line or "Failed", style="bright_red")
@@ -619,7 +618,7 @@ class RefreshDashboard:
                 bar = ProgressBar(
                     total=100.0,
                     completed=t.progress,
-                    width=20,
+                    width=18,
                     complete_style="bright_cyan",
                     pulse=True,
                     pulse_style="bright_blue",
@@ -629,15 +628,14 @@ class RefreshDashboard:
                 detail_str = f"{t.step_label} · {t.last_line}" if t.last_line else t.step_label
                 detail_txt = Text(detail_str, style="bright_cyan")
             else:
-                icon = Text("⏳", style="dim")
+                icon = Text("·", style="dim")
                 name_txt = Text(t.name, style="dim")
-                bar = ProgressBar(total=100.0, completed=0.0, width=20, style="grey23")
-                pct_txt = Text("  0%", style="dim")
-                time_txt = Text("   --", style="dim")
+                bar = ProgressBar(total=100.0, completed=0.0, width=18, style="grey23")
+                pct_txt = Text("0%", style="dim")
+                time_txt = Text("--", style="dim")
                 detail_txt = Text(t.step_label, style="dim italic")
 
-            cat_txt = Text(t.category, style="dim")
-            task_table.add_row(icon, name_txt, cat_txt, bar, pct_txt, time_txt, detail_txt)
+            task_table.add_row(icon, name_txt, bar, pct_txt, time_txt, detail_txt)
 
         components: List[RenderableType] = [
             header_grid,
