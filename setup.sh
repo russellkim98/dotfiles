@@ -69,25 +69,27 @@ info "🔌 Updating Zsh plugins (zgenom)..."
 zsh -c "source $HOME/.zshrc && zgenom selfupdate && zgenom update"
 
 # 6. iTerm2 Profile
-if [ -d "/Applications/iTerm.app" ]; then
+if [ -d "/Applications/iTerm.app" ] && [ -f "$SCRIPT_DIR/iterm2-theme.json" ]; then
     info "🎨 Installing iTerm2 profile..."
-    ITERM_PROFILES_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
-    mkdir -p "$ITERM_PROFILES_DIR"
-    ITERM_DOTFILES_GUID="0EAB8838-074A-4EB0-9967-7504022C69DD"
+    rm -f "$HOME/Library/Application Support/iTerm2/DynamicProfiles/dotfiles-profile.json" 2>/dev/null || true
 
-    # Wrap the profile JSON in Dynamic Profiles format
-    python3 -c "
-import sys, json
-with open(sys.argv[1]) as f:
+    python3 - "$SCRIPT_DIR/iterm2-theme.json" <<'PY'
+import json, plistlib, subprocess, sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as f:
     profile = json.load(f)
-profile['Dynamic Profile Parent Name'] = 'Default'
-# Distinct GUID: the exported profile's GUID collides with the static profile it came from
-profile['Guid'] = sys.argv[2]
-print(json.dumps({'Profiles': [profile]}, indent=2))
-" "$SCRIPT_DIR/iterm2-theme.json" "$ITERM_DOTFILES_GUID" > "$ITERM_PROFILES_DIR/dotfiles-profile.json"
 
-    # Set as default profile
-    defaults write com.googlecode.iterm2 "Default Bookmark Guid" "$ITERM_DOTFILES_GUID"
+guid = profile.get("Guid", "E7BCCD8D-730C-425D-A5DE-611342D95F3D")
+res = subprocess.run(["defaults", "export", "com.googlecode.iterm2", "-"], capture_output=True)
+data = plistlib.loads(res.stdout) if res.returncode == 0 and res.stdout else {}
+
+bookmarks = [b for b in data.get("New Bookmarks", []) if b.get("Guid") != guid]
+bookmarks.append(profile)
+data["New Bookmarks"] = bookmarks
+data["Default Bookmark Guid"] = guid
+
+subprocess.run(["defaults", "import", "com.googlecode.iterm2", "-"], input=plistlib.dumps(data), check=True)
+PY
 
     success "iTerm2 profile installed."
 fi
