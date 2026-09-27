@@ -570,10 +570,9 @@ class RefreshDashboard:
         overall_bar = ProgressBar(
             total=100.0,
             completed=overall_pct,
+            style="grey23",
             complete_style="bright_green" if done_tasks == total_tasks and failed_tasks == 0 else "bright_cyan",
             finished_style="bright_green",
-            pulse=not final and done_tasks < total_tasks,
-            pulse_style="bright_blue",
         )
         overall_bar_grid.add_row(
             Text("Overall", style="bold dim"),
@@ -601,14 +600,14 @@ class RefreshDashboard:
             if t.status == "done":
                 icon: RenderableType = Text("✓", style="bold bright_green")
                 name_txt = Text(t.name, style="white")
-                bar = ProgressBar(total=100.0, completed=100.0, width=18, complete_style="green", finished_style="bright_green")
+                bar = ProgressBar(total=100.0, completed=100.0, width=18, style="grey23", complete_style="green", finished_style="bright_green")
                 pct_txt = Text("100%", style="green")
                 time_txt = Text(f"{t.elapsed:4.1f}s", style="dim")
                 detail_txt = Text(t.last_line or "Complete", style="dim")
             elif t.status == "failed":
                 icon = Text("✗", style="bold bright_red")
                 name_txt = Text(t.name, style="bold bright_red")
-                bar = ProgressBar(total=100.0, completed=max(10.0, t.progress), width=18, complete_style="red")
+                bar = ProgressBar(total=100.0, completed=max(10.0, t.progress), width=18, style="grey23", complete_style="red")
                 pct_txt = Text(f"{t.progress:3.0f}%", style="red")
                 time_txt = Text(f"{t.elapsed:4.1f}s", style="red")
                 detail_txt = Text(t.last_line or "Failed", style="bright_red")
@@ -619,9 +618,8 @@ class RefreshDashboard:
                     total=100.0,
                     completed=t.progress,
                     width=18,
+                    style="grey23",
                     complete_style="bright_cyan",
-                    pulse=True,
-                    pulse_style="bright_blue",
                 )
                 pct_txt = Text(f"{t.progress:3.0f}%", style="bold bright_cyan")
                 time_txt = Text(f"{t.elapsed:4.1f}s", style="bright_blue")
