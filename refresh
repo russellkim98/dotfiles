@@ -1,349 +1,828 @@
-#!/usr/bin/env bash
-# refresh — Update everything on this system. Fast, safe, and comprehensive.
-#
-# Phase 1 (Sequential): Dotfiles & symlinks (updates Brewfile/configs first)
-# Phase 2 (Parallel):   Core system & standalone managers (Homebrew, Zsh, agy, macOS)
-# Phase 3 (Parallel):   Tool ecosystems & plugins that depend on Homebrew runtimes
-#                       (UV + Python, OpenClaw, npm, Neovim, GitHub CLI, VS Code)
+#!/usr/bin/env python3
+"""
+refresh — Real-time animated TUI dashboard for updating the entire macOS system.
+Zero external dependencies (uses Python standard library asyncio + ANSI DEC 2026 synchronized output).
+"""
 
-set -uo pipefail
+import asyncio
+import fcntl
+import math
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import unicodedata
+from dataclasses import dataclass, field
+from typing import Callable, Coroutine, List, Optional
 
 # ── Non-interactive environment (prevent background /dev/tty hangs) ───
-export LANG="en_US.UTF-8"
-export LC_ALL="en_US.UTF-8"
-export LANGUAGE="en_US:en"
-export NONINTERACTIVE=1
-export CI=1
-export GIT_TERMINAL_PROMPT=0
-export GIT_SSH_COMMAND="ssh -o BatchMode=yes"
-export HOMEBREW_NO_ENV_HINTS=1
-export HOMEBREW_NO_INSTALL_CLEANUP=1
+os.environ["LANG"] = "en_US.UTF-8"
+os.environ["LC_ALL"] = "en_US.UTF-8"
+os.environ["LANGUAGE"] = "en_US:en"
+os.environ["NONINTERACTIVE"] = "1"
+os.environ["CI"] = "1"
+os.environ["GIT_TERMINAL_PROMPT"] = "0"
+os.environ["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+os.environ["HOMEBREW_NO_ENV_HINTS"] = "1"
+os.environ["HOMEBREW_NO_INSTALL_CLEANUP"] = "1"
+os.environ["HOMEBREW_NO_AUTO_UPDATE"] = "1"
 
-# ── Colors & formatting ───────────────────────────────────────────────
-BLUE='\033[1;34m'    GREEN='\033[1;32m'   YELLOW='\033[1;33m'
-RED='\033[1;31m'     DIM='\033[2m'        BOLD='\033[1m'
-NC='\033[0m'
+# ── ANSI & Terminal Control ───────────────────────────────────────────
+ESC = "\033["
+HIDE_CURSOR = f"{ESC}?25l"
+SHOW_CURSOR = f"{ESC}?25h"
+SYNC_START = f"{ESC}?2026h"
+SYNC_END = f"{ESC}?2026l"
+CLEAR_LINE = f"{ESC}2K"
 
-info()    { printf "${BLUE}==>${NC} %s\n" "$1"; }
-success() { printf "${GREEN} ✓${NC}  %s\n" "$1"; }
-warn()    { printf "${YELLOW} ⚠${NC}  %s\n" "$1"; }
-fail()    { printf "${RED} ✗${NC}  %s\n" "$1"; }
+RESET = f"{ESC}0m"
+BOLD = f"{ESC}1m"
+DIM = f"{ESC}2m"
 
-TOTAL_START=$SECONDS
-TOTAL_FAILURES=0
-TOTAL_SUCCEEDED=0
+# Nord-inspired TrueColor ANSI palette
+C_CYAN = f"{ESC}38;2;136;192;208m"     # #88C0D0
+C_BLUE = f"{ESC}38;2;129;161;193m"     # #81A1C1
+C_GREEN = f"{ESC}38;2;163;190;140m"    # #A3BE8C
+C_YELLOW = f"{ESC}38;2;235;203;139m"   # #EBCB8B
+C_RED = f"{ESC}38;2;191;97;106m"       # #BF616A
+C_PURPLE = f"{ESC}38;2;180;142;173m"   # #B48EAD
+C_GRAY = f"{ESC}38;2;108;118;138m"     # #6C768A
+C_DARK = f"{ESC}38;2;67;76;94m"        # #434C5E
+C_WHITE = f"{ESC}38;2;236;239;244m"    # #ECEFF4
 
-# ── Single-instance lock & temp dir for per-task logs ─────────────────
-LOCK_DIR="/tmp/refresh-${UID}.lock"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-    old_pid=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
-    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
-        fail "Another 'refresh' instance (PID $old_pid) is already running."
-        exit 1
-    fi
-    rm -rf "$LOCK_DIR"
-    mkdir -p "$LOCK_DIR"
-fi
-echo "$$" > "$LOCK_DIR/pid"
+SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+BLOCKS = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
 
-TASK_DIR=$(mktemp -d)
-declare -a PIDS=() NAMES=()
+ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
-cleanup() {
-    local sig="${1:-EXIT}"
-    if [ "${#PIDS[@]}" -gt 0 ]; then
-        for pid in "${PIDS[@]}"; do
-            if kill -0 "$pid" 2>/dev/null; then
-                pkill -TERM -P "$pid" 2>/dev/null || true
-                kill -TERM "$pid" 2>/dev/null || true
-            fi
-        done
-        wait "${PIDS[@]}" 2>/dev/null || true
-    fi
-    rm -rf "$TASK_DIR" "$LOCK_DIR"
-    if [ "$sig" != "EXIT" ]; then
-        printf "\n${YELLOW} ⚠  Refresh interrupted (${sig}). Cleaned up background tasks.${NC}\n"
-        exit 130
-    fi
-}
-trap 'cleanup INT'  INT
-trap 'cleanup TERM' TERM
-trap 'cleanup EXIT' EXIT
 
-# ── Parallel task runner ──────────────────────────────────────────────
+def strip_ansi(text: str) -> str:
+    return ANSI_ESCAPE_RE.sub("", text)
 
-# Launch a named task in the background, capturing output & elapsed time.
-run_task() {
-    local name="$1"; shift
-    local slug="${name//[^a-zA-Z0-9_-]/_}"
-    local logfile="$TASK_DIR/$slug.log"
-    local timefile="$TASK_DIR/$slug.time"
-    (
-        t0=$SECONDS
-        trap 'echo "$((SECONDS - t0))" > "$timefile"' EXIT
-        set -eo pipefail
-        "$@"
-    ) < /dev/null > "$logfile" 2>&1 &
-    PIDS+=($!)
-    NAMES+=("$name")
-}
 
-# Wait for all launched tasks in the current phase and print results.
-wait_tasks() {
-    local phase_failures=0
-    for i in "${!PIDS[@]}"; do
-        local name="${NAMES[$i]}"
-        local slug="${name//[^a-zA-Z0-9_-]/_}"
-        local logfile="$TASK_DIR/$slug.log"
-        local timefile="$TASK_DIR/$slug.time"
-        local rc=0
-        wait "${PIDS[$i]}" 2>/dev/null || rc=$?
-
-        local dur=""
-        if [ -f "$timefile" ]; then
-            dur=" ${DIM}($(cat "$timefile")s)${NC}"
-        fi
-
-        if [ "$rc" -eq 0 ]; then
-            printf "${GREEN} ✓${NC}  %s%b\n" "$name" "$dur"
-            TOTAL_SUCCEEDED=$((TOTAL_SUCCEEDED + 1))
-        else
-            printf "${RED} ✗${NC}  %s%b\n" "$name" "$dur"
-            phase_failures=$((phase_failures + 1))
-            TOTAL_FAILURES=$((TOTAL_FAILURES + 1))
-        fi
-
-        # Print captured output, indented and dimmed (strip carriage-return noise)
-        if [ -s "$logfile" ]; then
-            printf "${DIM}"
-            tr '\r' '\n' < "$logfile" | sed -e '/^[[:space:]]*$/d' -e 's/^/     /'
-            printf "${NC}"
-        fi
-    done
-    PIDS=() NAMES=()
-    return $phase_failures
-}
-
-# Serialize global npm mutations so OpenClaw and npm never race on node_modules.
-with_npm_lock() {
-    local npm_lock="$TASK_DIR/npm_global.lock"
-    while ! mkdir "$npm_lock" 2>/dev/null; do
-        sleep 0.2
-    done
-    local rc=0
-    "$@" || rc=$?
-    rmdir "$npm_lock" 2>/dev/null || true
-    return $rc
-}
-
-# ── Task definitions ─────────────────────────────────────────────────
-
-task_dotfiles() {
-    local dotfiles_dir="$1"
-    # Reset auto-generated Neovim lockfile if tracked in a submodule
-    if [ -d "$dotfiles_dir/astronvim_template/.git" ] || [ -f "$dotfiles_dir/astronvim_template/.git" ]; then
-        git -C "$dotfiles_dir/astronvim_template" checkout -- lazy-lock.json 2>/dev/null || true
-    fi
-    git -C "$dotfiles_dir" pull --rebase --autostash
-    if [ -f "$dotfiles_dir/.gitmodules" ]; then
-        git -C "$dotfiles_dir" submodule update --init --recursive --force
-    fi
-    if [ -f "$dotfiles_dir/symlink.sh" ]; then
-        chmod +x "$dotfiles_dir/symlink.sh"
-        "$dotfiles_dir/symlink.sh"
-    fi
-}
-
-task_homebrew() {
-    local dotfiles_dir="$1"
-    brew update
-    export HOMEBREW_NO_AUTO_UPDATE=1
-    brew upgrade --greedy-auto-updates
-    if [ -f "$dotfiles_dir/Brewfile" ]; then
-        brew bundle check --file="$dotfiles_dir/Brewfile" >/dev/null 2>&1 \
-            || brew bundle install --file="$dotfiles_dir/Brewfile" --no-upgrade
-    fi
-    brew autoremove
-    brew cleanup --prune=all
-}
-
-task_zgenom() {
-    zsh -c '
-        set -e
-        source "$HOME/.zgenom/zgenom.zsh"
-        zgenom selfupdate
-        zgenom update
-        rm -f "$HOME"/.zcompdump*
-        source "$HOME/.zshrc" >/dev/null 2>&1 || true
-    '
-}
-
-task_agy() {
-    agy update
-}
-
-task_macos_updates() {
-    softwareupdate -l
-}
-
-task_mas() {
-    mas upgrade
-}
-
-task_uv() {
-    local uv_path real_uv_path
-    uv_path=$(command -v uv)
-    real_uv_path=$(realpath "$uv_path" 2>/dev/null || echo "$uv_path")
-    if [[ "$real_uv_path" == *"Cellar/uv"* || "$real_uv_path" == *"homebrew"* || "$uv_path" == "/opt/homebrew/"* ]]; then
-        echo "UV binary is managed by Homebrew — skipping self-update."
-    else
-        uv self update
-    fi
-
-    # Upgrade uv-managed Python installations
-    if [ -n "$(uv python list --only-installed 2>/dev/null)" ]; then
-        uv python upgrade
-    fi
-
-    # Upgrade uv-managed CLI tools (ruff, nano-pdf, etc.)
-    if [ -n "$(uv tool list 2>/dev/null)" ]; then
-        uv tool upgrade --all
-    else
-        echo "No uv tools installed."
-    fi
-}
-
-task_openclaw() {
-    with_npm_lock openclaw update --yes
-}
-
-task_npm() {
-    local npm_path real_npm_path
-    npm_path=$(command -v npm)
-    real_npm_path=$(realpath "$npm_path" 2>/dev/null || echo "$npm_path")
-
-    # Do not overwrite Homebrew's npm symlink if node is managed by Homebrew
-    if [[ "$real_npm_path" == *"Cellar/node"* || "$real_npm_path" == *"homebrew"* ]]; then
-        echo "npm is bundled with Homebrew node — skipping npm self-overwrite."
-    else
-        with_npm_lock npm install -g npm
-    fi
-
-    # Upgrade other global npm packages (excluding npm & openclaw which has its own updater)
-    local pkgs
-    pkgs=$(npm list -g --depth=0 --parseable 2>/dev/null \
-        | tail -n +2 \
-        | sed 's|.*/node_modules/||' \
-        | grep -Ev '^(npm|openclaw)$' || true)
-
-    if [ -n "$pkgs" ]; then
-        # shellcheck disable=SC2086
-        with_npm_lock npm update -g $pkgs
-    else
-        echo "No additional global npm packages to update."
-    fi
-}
-
-task_pip() {
-    local py_path real_py_path
-    py_path=$(command -v python3)
-    real_py_path=$(realpath "$py_path" 2>/dev/null || echo "$py_path")
-
-    if [[ "$py_path" == "/usr/bin/python3" || "$real_py_path" == "/Library/Developer/"* || "$real_py_path" == "/System/"* ]]; then
-        echo "python3 is macOS system/Xcode Python — skipping global pip upgrade."
+def char_width(ch: str) -> int:
+    if unicodedata.combining(ch) or ch in ("\ufe0f", "\ufe0e", "\u200d"):
         return 0
-    fi
+    if unicodedata.east_asian_width(ch) in ("W", "F"):
+        return 2
+    return 1
 
-    if python3 -c "
-import sysconfig, os
-for scheme in ['stdlib', 'platstdlib', 'purelib', 'platlib']:
+
+def display_width(text: str) -> int:
+    return sum(char_width(c) for c in strip_ansi(text))
+
+
+def fit_width(text: str, target_w: int) -> str:
+    clean = "".join(c for c in strip_ansi(text) if c >= " " and ch_printable(c))
+    cur_w = 0
+    out = []
+    for c in clean:
+        w = char_width(c)
+        if cur_w + w > target_w - 1 and display_width(clean) > target_w:
+            out.append("…")
+            cur_w += 1
+            break
+        out.append(c)
+        cur_w += w
+    return "".join(out) + (" " * max(0, target_w - cur_w))
+
+
+def ch_printable(c: str) -> bool:
+    return c not in ("\r", "\n", "\t", "\ufe0f", "\ufe0e")
+
+
+@dataclass
+class StepSpec:
+    label: str
+    cmd: List[str]
+    weight: float = 1.0
+    env: Optional[dict] = None
+    cwd: Optional[str] = None
+    ignore_error: bool = False
+
+
+@dataclass
+class TaskState:
+    id: str
+    name: str
+    deps: List[str] = field(default_factory=list)
+    status: str = "queued"  # queued, waiting, running, done, failed, skipped
+    progress: float = 0.0   # 0.0 to 1.0
+    target_progress: float = 0.0
+    step_label: str = "Queued"
+    last_line: str = ""
+    logs: List[str] = field(default_factory=list)
+    start_time: Optional[float] = None
+    end_time: Optional[float] = None
+    expected_duration: float = 8.0
+    runner: Optional[Callable[["TaskState"], Coroutine]] = None
+    proc: Optional[asyncio.subprocess.Process] = None
+
+    @property
+    def elapsed(self) -> float:
+        if self.start_time is None:
+            return 0.0
+        end = self.end_time if self.end_time is not None else time.monotonic()
+        return max(0.0, end - self.start_time)
+
+
+class RefreshDashboard:
+    def __init__(self) -> None:
+        self.home = os.path.expanduser("~")
+        self.dotfiles_dir = os.path.join(self.home, "dotfiles")
+        self.tasks: List[TaskState] = []
+        self.task_map: dict[str, TaskState] = {}
+        self.npm_lock = asyncio.Lock()
+        self.start_time = time.monotonic()
+        self.frame_idx = 0
+        self.rendered_lines = 0
+        self.is_tty = sys.stdout.isatty()
+        self.cancelled = False
+
+    def add_task(
+        self,
+        task_id: str,
+        name: str,
+        runner: Callable[[TaskState], Coroutine],
+        deps: Optional[List[str]] = None,
+        expected_duration: float = 8.0,
+    ) -> None:
+        t = TaskState(
+            id=task_id,
+            name=name,
+            deps=deps or [],
+            runner=runner,
+            expected_duration=expected_duration,
+        )
+        self.tasks.append(t)
+        self.task_map[task_id] = t
+
+    async def run_cmd(
+        self,
+        task: TaskState,
+        cmd: List[str],
+        step_label: str,
+        base_progress: float,
+        span_progress: float,
+        expected_sec: float = 5.0,
+        cwd: Optional[str] = None,
+        env_overrides: Optional[dict] = None,
+    ) -> int:
+        task.step_label = step_label
+        task.target_progress = base_progress + span_progress * 0.88
+        env = os.environ.copy()
+        if env_overrides:
+            env.update(env_overrides)
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=cwd,
+            env=env,
+            start_new_session=True,
+        )
+        task.proc = proc
+        t0 = time.monotonic()
+
+        async def read_stream() -> None:
+            assert proc.stdout is not None
+            buf = b""
+            while True:
+                chunk = await proc.stdout.read(256)
+                if not chunk:
+                    break
+                buf += chunk
+                parts = re.split(b"[\r\n]+", buf)
+                buf = parts[-1]
+                for raw in parts[:-1]:
+                    line = strip_ansi(raw.decode("utf-8", errors="replace")).strip()
+                    if line:
+                        task.last_line = line
+                        task.logs.append(line)
+            if buf:
+                line = strip_ansi(buf.decode("utf-8", errors="replace")).strip()
+                if line:
+                    task.last_line = line
+                    task.logs.append(line)
+
+        reader_task = asyncio.create_task(read_stream())
+        try:
+            while proc.returncode is None:
+                await asyncio.sleep(0.05)
+                dt = time.monotonic() - t0
+                ratio = 1.0 - math.exp(-dt / max(0.5, expected_sec))
+                task.progress = max(
+                    task.progress,
+                    base_progress + span_progress * min(0.92, ratio * 0.90),
+                )
+            await reader_task
+        finally:
+            task.proc = None
+
+        task.progress = base_progress + span_progress
+        return proc.returncode or 0
+
+    # ── Task Implementations ──────────────────────────────────────────
+
+    async def task_dotfiles(self, t: TaskState) -> None:
+        if not os.path.isdir(os.path.join(self.dotfiles_dir, ".git")):
+            t.last_line = "~/dotfiles not found, skipped"
+            t.progress = 1.0
+            return
+
+        # Reset lazy-lock.json if submodule exists
+        sub_git = os.path.join(self.dotfiles_dir, "astronvim_template", ".git")
+        if os.path.exists(sub_git):
+            await self.run_cmd(
+                t,
+                ["git", "-C", os.path.join(self.dotfiles_dir, "astronvim_template"), "checkout", "--", "lazy-lock.json"],
+                "Reset lockfile",
+                0.0,
+                0.10,
+                1.0,
+            )
+
+        rc = await self.run_cmd(
+            t,
+            ["git", "-C", self.dotfiles_dir, "pull", "--rebase", "--autostash"],
+            "git pull --rebase",
+            0.10,
+            0.50,
+            2.5,
+        )
+        if rc != 0:
+            raise RuntimeError("git pull failed")
+
+        if os.path.isfile(os.path.join(self.dotfiles_dir, ".gitmodules")):
+            rc = await self.run_cmd(
+                t,
+                ["git", "-C", self.dotfiles_dir, "submodule", "update", "--init", "--recursive", "--force"],
+                "git submodule update",
+                0.60,
+                0.15,
+                2.0,
+            )
+            if rc != 0:
+                raise RuntimeError("git submodule update failed")
+
+        symlink_sh = os.path.join(self.dotfiles_dir, "symlink.sh")
+        if os.path.isfile(symlink_sh):
+            os.chmod(symlink_sh, 0o755)
+            rc = await self.run_cmd(t, [symlink_sh], "Linking dotfiles", 0.75, 0.25, 1.0)
+            if rc != 0:
+                raise RuntimeError("symlink.sh failed")
+
+        t.last_line = "Synced & linked"
+
+    async def task_homebrew(self, t: TaskState) -> None:
+        rc = await self.run_cmd(
+            t,
+            ["brew", "update"],
+            "brew update",
+            0.0,
+            0.22,
+            4.0,
+            env_overrides={"HOMEBREW_NO_AUTO_UPDATE": "0"},
+        )
+        if rc != 0:
+            raise RuntimeError("brew update failed")
+
+        rc = await self.run_cmd(
+            t,
+            ["brew", "upgrade", "--greedy-auto-updates"],
+            "brew upgrade",
+            0.22,
+            0.40,
+            8.0,
+        )
+        if rc != 0:
+            raise RuntimeError("brew upgrade failed")
+
+        brewfile = os.path.join(self.dotfiles_dir, "Brewfile")
+        if os.path.isfile(brewfile):
+            chk = await self.run_cmd(
+                t,
+                ["brew", "bundle", "check", f"--file={brewfile}"],
+                "brew bundle check",
+                0.62,
+                0.10,
+                1.5,
+            )
+            if chk != 0:
+                rc = await self.run_cmd(
+                    t,
+                    ["brew", "bundle", "install", f"--file={brewfile}", "--no-upgrade"],
+                    "brew bundle install",
+                    0.72,
+                    0.10,
+                    5.0,
+                )
+                if rc != 0:
+                    raise RuntimeError("brew bundle install failed")
+        else:
+            t.progress = 0.82
+
+        rc = await self.run_cmd(t, ["brew", "autoremove"], "brew autoremove", 0.82, 0.08, 1.5)
+        if rc != 0:
+            raise RuntimeError("brew autoremove failed")
+
+        rc = await self.run_cmd(t, ["brew", "cleanup", "--prune=all"], "brew cleanup", 0.90, 0.10, 2.5)
+        if rc != 0:
+            raise RuntimeError("brew cleanup failed")
+
+        t.last_line = "Formulae, casks & Brewfile up to date"
+
+    async def task_zgenom(self, t: TaskState) -> None:
+        rc = await self.run_cmd(
+            t,
+            ["zsh", "-c", 'source "$HOME/.zgenom/zgenom.zsh" && zgenom selfupdate'],
+            "zgenom selfupdate",
+            0.0,
+            0.35,
+            2.0,
+        )
+        if rc != 0:
+            raise RuntimeError("zgenom selfupdate failed")
+
+        rc = await self.run_cmd(
+            t,
+            ["zsh", "-c", 'source "$HOME/.zgenom/zgenom.zsh" && zgenom update'],
+            "zgenom update",
+            0.35,
+            0.45,
+            3.5,
+        )
+        if rc != 0:
+            raise RuntimeError("zgenom update failed")
+
+        await self.run_cmd(
+            t,
+            ["zsh", "-c", 'rm -f "$HOME"/.zcompdump* && source "$HOME/.zshrc" >/dev/null 2>&1 || true'],
+            "Rebuilding init & completions",
+            0.80,
+            0.20,
+            1.5,
+        )
+        t.last_line = "Plugins & completions updated"
+
+    async def task_agy(self, t: TaskState) -> None:
+        rc = await self.run_cmd(t, ["agy", "update"], "agy update", 0.0, 1.0, 3.0)
+        if rc != 0:
+            raise RuntimeError("agy update failed")
+        if not t.last_line:
+            t.last_line = "Up to date"
+
+    async def task_macos(self, t: TaskState) -> None:
+        rc = await self.run_cmd(t, ["softwareupdate", "-l"], "Checking Apple servers", 0.0, 1.0, 8.0)
+        if rc != 0:
+            raise RuntimeError("softwareupdate -l failed")
+        for line in reversed(t.logs):
+            if "No new software available" in line or "Software Update found" in line or "*" in line:
+                t.last_line = line
+                break
+
+    async def task_mas(self, t: TaskState) -> None:
+        rc = await self.run_cmd(t, ["mas", "upgrade"], "mas upgrade", 0.0, 1.0, 5.0)
+        if rc != 0:
+            raise RuntimeError("mas upgrade failed")
+        if not t.last_line:
+            t.last_line = "App Store apps up to date"
+
+    async def task_uv(self, t: TaskState) -> None:
+        uv_path = shutil.which("uv") or ""
+        real_uv = os.path.realpath(uv_path) if uv_path else ""
+        if "Cellar/uv" not in real_uv and "homebrew" not in real_uv and not uv_path.startswith("/opt/homebrew/"):
+            rc = await self.run_cmd(t, ["uv", "self", "update"], "uv self update", 0.0, 0.25, 2.0)
+            if rc != 0:
+                raise RuntimeError("uv self update failed")
+        else:
+            t.progress = 0.25
+
+        rc = await self.run_cmd(t, ["uv", "python", "upgrade"], "uv python upgrade", 0.25, 0.35, 2.5)
+        if rc != 0:
+            raise RuntimeError("uv python upgrade failed")
+
+        rc = await self.run_cmd(t, ["uv", "tool", "upgrade", "--all"], "uv tool upgrade --all", 0.60, 0.40, 2.5)
+        if rc != 0:
+            raise RuntimeError("uv tool upgrade failed")
+        if not t.last_line:
+            t.last_line = "Python & uv tools up to date"
+
+    async def task_openclaw(self, t: TaskState) -> None:
+        t.step_label = "Waiting for npm lock"
+        async with self.npm_lock:
+            rc = await self.run_cmd(t, ["openclaw", "update", "--yes"], "openclaw update --yes", 0.0, 1.0, 5.0)
+            if rc != 0:
+                raise RuntimeError("openclaw update failed")
+        if not t.last_line:
+            t.last_line = "OpenClaw up to date"
+
+    async def task_npm(self, t: TaskState) -> None:
+        npm_path = shutil.which("npm") or ""
+        real_npm = os.path.realpath(npm_path) if npm_path else ""
+
+        t.step_label = "Scanning global packages"
+        proc = await asyncio.create_subprocess_exec(
+            "npm", "list", "-g", "--depth=0", "--parseable",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await proc.communicate()
+        lines = out.decode("utf-8", errors="replace").splitlines()[1:]
+        pkgs = []
+        for p in lines:
+            if "/node_modules/" in p:
+                pkg = p.split("/node_modules/")[-1].strip()
+                if pkg and pkg not in ("npm", "openclaw"):
+                    pkgs.append(pkg)
+
+        t.progress = 0.25
+        t.step_label = "Waiting for npm lock"
+        async with self.npm_lock:
+            if "Cellar/node" not in real_npm and "homebrew" not in real_npm:
+                rc = await self.run_cmd(t, ["npm", "install", "-g", "npm"], "npm self-update", 0.25, 0.35, 3.0)
+                if rc != 0:
+                    raise RuntimeError("npm self-update failed")
+            else:
+                t.progress = 0.50
+
+            if pkgs:
+                rc = await self.run_cmd(
+                    t,
+                    ["npm", "update", "-g", *pkgs],
+                    f"Updating {', '.join(pkgs)}",
+                    0.50,
+                    0.50,
+                    4.0,
+                )
+                if rc != 0:
+                    raise RuntimeError("npm update -g failed")
+                t.last_line = f"Updated {', '.join(pkgs)}"
+            else:
+                t.progress = 1.0
+                t.last_line = "No extra global packages to update"
+
+    async def task_pip(self, t: TaskState) -> None:
+        py_path = shutil.which("python3") or ""
+        real_py = os.path.realpath(py_path) if py_path else ""
+        if py_path == "/usr/bin/python3" or real_py.startswith("/Library/Developer/") or real_py.startswith("/System/"):
+            await asyncio.sleep(0.15)
+            t.progress = 1.0
+            t.last_line = "System Python (managed via uv)"
+            return
+
+        check_code = (
+            "import sysconfig, os\n"
+            "for s in ('stdlib','platstdlib','purelib','platlib'):\n"
+            "  p = sysconfig.get_path(s)\n"
+            "  if p and os.path.exists(os.path.join(p, 'EXTERNALLY-MANAGED')): raise SystemExit(0)\n"
+            "raise SystemExit(1)\n"
+        )
+        proc = await asyncio.create_subprocess_exec(
+            "python3", "-c", check_code,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await proc.wait()
+        if proc.returncode == 0:
+            t.progress = 1.0
+            t.last_line = "PEP 668 externally managed (skipped)"
+            return
+
+        rc = await self.run_cmd(t, ["python3", "-m", "pip", "install", "--upgrade", "pip"], "pip upgrade", 0.0, 1.0, 2.5)
+        if rc != 0:
+            raise RuntimeError("pip upgrade failed")
+
+    async def task_neovim(self, t: TaskState) -> None:
+        rc = await self.run_cmd(
+            t,
+            ["nvim", "--headless", "+Lazy! sync", "+qa"],
+            "Lazy! sync",
+            0.0,
+            1.0,
+            3.5,
+        )
+        if rc != 0:
+            raise RuntimeError("Neovim Lazy! sync failed")
+        t.last_line = "AstroNvim / Lazy plugins synced"
+
+    async def task_gh(self, t: TaskState) -> None:
+        proc = await asyncio.create_subprocess_exec(
+            "gh", "extension", "list",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await proc.communicate()
+        if not out.strip():
+            await asyncio.sleep(0.15)
+            t.progress = 1.0
+            t.last_line = "No extensions installed"
+            return
+
+        rc = await self.run_cmd(t, ["gh", "extension", "upgrade", "--all"], "gh extension upgrade", 0.2, 0.8, 2.5)
+        if rc != 0:
+            raise RuntimeError("gh extension upgrade failed")
+        t.last_line = "Extensions upgraded"
+
+    async def task_vscode(self, t: TaskState) -> None:
+        rc = await self.run_cmd(t, ["code", "--update-extensions"], "code --update-extensions", 0.0, 1.0, 3.0)
+        if rc != 0:
+            raise RuntimeError("VS Code extension update failed")
+        if not t.last_line:
+            t.last_line = "Extensions up to date"
+
+    # ── Orchestrator & DAG Scheduler ──────────────────────────────────
+
+    async def execute_task(self, t: TaskState) -> None:
+        # Wait for dependencies
+        while any(self.task_map[d].status in ("queued", "waiting", "running") for d in t.deps):
+            dep_names = [self.task_map[d].name for d in t.deps if self.task_map[d].status in ("queued", "waiting", "running")]
+            t.status = "waiting"
+            t.step_label = f"Waiting on {', '.join(dep_names)}"
+            await asyncio.sleep(0.05)
+
+        t.status = "running"
+        t.start_time = time.monotonic()
+        t.step_label = "Starting..."
+        try:
+            assert t.runner is not None
+            await t.runner(t)
+            t.progress = 1.0
+            t.status = "done"
+            t.step_label = "Complete"
+        except asyncio.CancelledError:
+            t.status = "failed"
+            t.step_label = "Cancelled"
+            raise
+        except Exception as exc:
+            t.status = "failed"
+            if not t.last_line:
+                t.last_line = str(exc)
+        finally:
+            t.end_time = time.monotonic()
+
+    # ── Smooth Unicode Progress Bar Renderer ──────────────────────────
+
+    def format_bar(self, progress: float, width: int, status: str) -> str:
+        progress = max(0.0, min(1.0, progress))
+        total_eighths = int(round(progress * width * 8))
+        full_blocks = total_eighths // 8
+        rem = total_eighths % 8
+
+        filled = "█" * full_blocks
+        if full_blocks < width:
+            partial = BLOCKS[rem] if rem > 0 else "░"
+            empty = "░" * max(0, width - full_blocks - 1)
+        else:
+            partial = ""
+            empty = ""
+
+        if status == "done":
+            color = C_GREEN
+        elif status == "failed":
+            color = C_RED
+        elif status == "running":
+            color = C_CYAN
+        else:
+            color = C_DARK
+
+        return f"{color}{filled}{partial}{C_DARK}{empty}{RESET}"
+
+    def render_frame(self) -> None:
+        if not self.is_tty:
+            return
+
+        cols, _ = shutil.get_terminal_size((100, 30))
+        cols = max(72, min(cols, 120))
+        inner_w = cols - 4  # Inside " │ " and " │"
+
+        total_tasks = len(self.tasks)
+        done_tasks = sum(1 for t in self.tasks if t.status in ("done", "failed"))
+        running_tasks = sum(1 for t in self.tasks if t.status == "running")
+        overall_prog = sum(t.progress for t in self.tasks) / max(1, total_tasks)
+        total_elapsed = time.monotonic() - self.start_time
+        spin = SPINNER_FRAMES[self.frame_idx % len(SPINNER_FRAMES)]
+
+        lines: List[str] = []
+
+        # Top border
+        lines.append(f" {C_DARK}╭{'─' * (cols - 2)}╮{RESET}")
+
+        # Header title + overall timer
+        title_left = f"{BOLD}{C_WHITE}SYSTEM REFRESH{RESET}"
+        if done_tasks == total_tasks:
+            status_badge = d_count_str(self.tasks)
+        else:
+            status_badge = f"{C_CYAN}{spin}{RESET} {C_WHITE}{running_tasks} active{RESET} {C_GRAY}•{RESET} {C_WHITE}{done_tasks}/{total_tasks}{RESET}"
+        timer_str = f"{C_BLUE}{BOLD}{total_elapsed:5.1f}s{RESET}"
+
+        right_part = f"{status_badge}   {timer_str}"
+        pad1 = max(1, inner_w - display_width(title_left) - display_width(right_part))
+        lines.append(f" {C_DARK}│{RESET} {title_left}{' ' * pad1}{right_part} {C_DARK}│{RESET}")
+
+        # Overall progress bar row
+        pct_str = f"{int(round(overall_prog * 100)):3d}%"
+        overall_label = "Overall  "
+        overall_bar_w = max(16, inner_w - len(overall_label) - 1 - len(pct_str))
+        overall_bar = self.format_bar(
+            overall_prog,
+            overall_bar_w,
+            "done" if done_tasks == total_tasks and all(t.status == "done" for t in self.tasks) else "running",
+        )
+        lines.append(
+            f" {C_DARK}│{RESET} {C_GRAY}{overall_label}{RESET}{overall_bar} {BOLD}{C_WHITE}{pct_str}{RESET} {C_DARK}│{RESET}"
+        )
+
+        # Divider
+        lines.append(f" {C_DARK}├{'─' * (cols - 2)}┤{RESET}")
+
+        # Task rows
+        name_w = 16
+        bar_w = 16
+        for t in self.tasks:
+            if t.status == "done":
+                icon = f"{C_GREEN}✓{RESET}"
+                name_col = f"{C_WHITE}{t.name:<{name_w}}{RESET}"
+            elif t.status == "failed":
+                icon = f"{C_RED}✗{RESET}"
+                name_col = f"{C_RED}{t.name:<{name_w}}{RESET}"
+            elif t.status == "running":
+                icon = f"{C_CYAN}{spin}{RESET}"
+                name_col = f"{BOLD}{C_WHITE}{t.name:<{name_w}}{RESET}"
+            else:
+                icon = f"{C_GRAY}⋯{RESET}"
+                name_col = f"{C_GRAY}{t.name:<{name_w}}{RESET}"
+
+            bar = self.format_bar(t.progress, bar_w, t.status)
+            tpct = f"{int(round(t.progress * 100)):3d}%"
+            pct_col = f"{C_WHITE if t.status == 'running' else C_GRAY}{tpct}{RESET}"
+
+            if t.start_time is not None:
+                time_col = f"{C_BLUE if t.status == 'running' else C_GRAY}{t.elapsed:5.1f}s{RESET}"
+            else:
+                time_col = f"{C_DARK}   -- {RESET}"
+
+            left_prefix = f"{icon} {name_col} {bar} {pct_col} {time_col}  "
+            avail_detail_w = max(8, inner_w - display_width(left_prefix))
+
+            if t.status in ("done", "failed") and t.last_line:
+                raw_detail = t.last_line
+            elif t.status != "running":
+                raw_detail = t.step_label
+            else:
+                raw_detail = f"{t.step_label} · {t.last_line}" if t.last_line else t.step_label
+
+            detail_padded = fit_width(raw_detail, avail_detail_w)
+            detail_col = f"{C_RED if t.status == 'failed' else (C_GRAY if t.status != 'running' else C_BLUE)}{detail_padded}{RESET}"
+
+            row = f" {C_DARK}│{RESET} {left_prefix}{detail_col} {C_DARK}│{RESET}"
+            lines.append(row)
+
+        # Bottom border
+        lines.append(f" {C_DARK}╰{'─' * (cols - 2)}╯{RESET}")
+
+        out = [SYNC_START]
+        if self.rendered_lines > 0:
+            out.append(f"{ESC}{self.rendered_lines}A\r")
+        for line in lines:
+            out.append(f"{CLEAR_LINE}{line}\n")
+        out.append(SYNC_END)
+
+        sys.stdout.write("".join(out))
+        sys.stdout.flush()
+        self.rendered_lines = len(lines)
+
+    async def run(self) -> int:
+        # Build task graph
+        self.add_task("dotfiles", "Dotfiles", self.task_dotfiles, deps=[], expected_duration=3.0)
+
+        if shutil.which("brew"):
+            self.add_task("homebrew", "Homebrew", self.task_homebrew, deps=["dotfiles"], expected_duration=12.0)
+        if os.path.isdir(os.path.join(self.home, ".zgenom")):
+            self.add_task("zgenom", "Zsh plugins", self.task_zgenom, deps=["dotfiles"], expected_duration=5.0)
+        if shutil.which("agy"):
+            self.add_task("agy", "Antigravity CLI", self.task_agy, deps=[], expected_duration=3.0)
+        if shutil.which("mas"):
+            self.add_task("mas", "App Store apps", self.task_mas, deps=[], expected_duration=6.0)
+        if shutil.which("softwareupdate"):
+            self.add_task("macos", "macOS updates", self.task_macos, deps=[], expected_duration=10.0)
+
+        brew_dep = ["homebrew"] if "homebrew" in self.task_map else []
+        if shutil.which("uv"):
+            self.add_task("uv", "UV + Python", self.task_uv, deps=brew_dep, expected_duration=4.0)
+        if shutil.which("openclaw"):
+            self.add_task("openclaw", "OpenClaw", self.task_openclaw, deps=brew_dep, expected_duration=5.0)
+        if shutil.which("npm"):
+            self.add_task("npm", "npm globals", self.task_npm, deps=brew_dep, expected_duration=4.0)
+        if shutil.which("python3"):
+            self.add_task("pip", "pip", self.task_pip, deps=brew_dep, expected_duration=1.0)
+        if shutil.which("nvim"):
+            self.add_task("nvim", "Neovim plugins", self.task_neovim, deps=brew_dep, expected_duration=4.0)
+        if shutil.which("gh"):
+            self.add_task("gh", "GitHub CLI ext", self.task_gh, deps=brew_dep, expected_duration=3.0)
+        if shutil.which("code"):
+            self.add_task("vscode", "VS Code ext", self.task_vscode, deps=brew_dep, expected_duration=4.0)
+
+        if self.is_tty:
+            sys.stdout.write("\n" + HIDE_CURSOR)
+            sys.stdout.flush()
+
+        workers = [asyncio.create_task(self.execute_task(t)) for t in self.tasks]
+
+        try:
+            while not all(w.done() for w in workers):
+                self.frame_idx += 1
+                self.render_frame()
+                await asyncio.sleep(0.06)
+            await asyncio.gather(*workers, return_exceptions=True)
+            self.frame_idx += 1
+            self.render_frame()
+        finally:
+            if self.is_tty:
+                sys.stdout.write(SHOW_CURSOR)
+                sys.stdout.flush()
+
+        # Print any failure logs clearly below the dashboard
+        failures = [t for t in self.tasks if t.status == "failed"]
+        if failures:
+            print(f"\n {C_RED}{BOLD}Failed Task Logs:{RESET}")
+            for t in failures:
+                print(f" {C_RED}✗ {t.name}:{RESET}")
+                for log_line in t.logs[-10:]:
+                    print(f"   {DIM}{log_line}{RESET}")
+            return 1
+
+        print(f" {C_GRAY}Run 'source ~/.zshrc' if shell configs changed.{RESET}")
+        return 0
+
+    def terminate_children(self) -> None:
+        for t in self.tasks:
+            if t.proc and t.proc.returncode is None:
+                try:
+                    os.killpg(os.getpgid(t.proc.pid), signal.SIGTERM)
+                except Exception:
+                    try:
+                        t.proc.terminate()
+                    except Exception:
+                        pass
+
+
+def d_count_str(tasks: List[TaskState]) -> str:
+    fails = sum(1 for t in tasks if t.status == "failed")
+    ok = sum(1 for t in tasks if t.status == "done")
+    if fails == 0:
+        return f"{C_GREEN}{BOLD}✓ All {ok} tasks complete{RESET}"
+    return f"{C_YELLOW}{BOLD}{ok} done, {fails} failed{RESET}"
+
+
+def main() -> int:
+    lock_path = f"/tmp/refresh-{os.getuid()}.lock"
+    lock_fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
     try:
-        path = sysconfig.get_path(scheme)
-        if path and os.path.exists(os.path.join(path, 'EXTERNALLY-MANAGED')):
-            exit(0)
-    except Exception:
-        pass
-exit(1)
-" 2>/dev/null; then
-        echo "Python is externally managed (PEP 668) — skipping global pip upgrade."
-    else
-        python3 -m pip install --upgrade pip
-    fi
-}
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print(f"{C_RED} ✗  Another 'refresh' instance is already running.{RESET}")
+        return 1
 
-task_neovim() {
-    nvim --headless "+Lazy! sync" +qa
-    echo "Lazy plugins synced."
-}
+    os.ftruncate(lock_fd, 0)
+    os.write(lock_fd, f"{os.getpid()}\n".encode())
 
-task_gh_extensions() {
-    if [ -n "$(gh extension list 2>/dev/null)" ]; then
-        gh extension upgrade --all
-    else
-        echo "No GitHub CLI extensions installed."
-    fi
-}
+    dash = RefreshDashboard()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 
-task_vscode_extensions() {
-    code --update-extensions
-}
+    def handle_sig() -> None:
+        dash.terminate_children()
+        for task in asyncio.all_tasks(loop):
+            task.cancel()
 
-# ══════════════════════════════════════════════════════════════════════
-#  Phase 1: Dotfiles (sequential — updates Brewfile and configs first)
-# ══════════════════════════════════════════════════════════════════════
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, handle_sig)
+        except NotImplementedError:
+            pass
 
-DOTFILES_DIR="$HOME/dotfiles"
+    try:
+        return loop.run_until_complete(dash.run())
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        dash.terminate_children()
+        if dash.is_tty:
+            sys.stdout.write(SHOW_CURSOR + "\n")
+        print(f" {C_YELLOW}⚠ Refresh interrupted. Cleaned up background tasks.{RESET}")
+        return 130
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            os.close(lock_fd)
+            os.unlink(lock_path)
+        except Exception:
+            pass
 
-printf "\n${BOLD}Phase 1: Dotfiles${NC}\n\n"
 
-if [ -d "$DOTFILES_DIR/.git" ]; then
-    run_task "Dotfiles" task_dotfiles "$DOTFILES_DIR"
-    wait_tasks || warn "Dotfiles encountered an issue — continuing with tool updates"
-else
-    warn "Dotfiles — ~/dotfiles not found, skipping"
-fi
-
-# ══════════════════════════════════════════════════════════════════════
-#  Phase 2: Core System & Standalone Managers (parallel)
-# ══════════════════════════════════════════════════════════════════════
-
-printf "\n${BOLD}Phase 2: Core system & package managers (parallel)${NC}\n\n"
-
-command -v brew           >/dev/null 2>&1 && run_task "Homebrew"          task_homebrew "$DOTFILES_DIR"
-[ -d "$HOME/.zgenom" ]                    && run_task "Zsh plugins"      task_zgenom
-command -v agy            >/dev/null 2>&1 && run_task "Antigravity CLI"   task_agy
-command -v mas            >/dev/null 2>&1 && run_task "App Store apps"    task_mas
-command -v softwareupdate >/dev/null 2>&1 && run_task "macOS updates"     task_macos_updates
-
-wait_tasks || true
-
-# ══════════════════════════════════════════════════════════════════════
-#  Phase 3: Tool Ecosystems & Plugins (parallel, post-Homebrew)
-# ══════════════════════════════════════════════════════════════════════
-
-printf "\n${BOLD}Phase 3: Tool ecosystems & plugins (parallel)${NC}\n\n"
-
-command -v uv             >/dev/null 2>&1 && run_task "UV + Python/tools" task_uv
-command -v openclaw       >/dev/null 2>&1 && run_task "OpenClaw"          task_openclaw
-command -v npm            >/dev/null 2>&1 && run_task "npm globals"       task_npm
-command -v python3        >/dev/null 2>&1 && run_task "pip"               task_pip
-command -v nvim           >/dev/null 2>&1 && run_task "Neovim plugins"    task_neovim
-command -v gh             >/dev/null 2>&1 && run_task "GitHub CLI ext"    task_gh_extensions
-command -v code           >/dev/null 2>&1 && run_task "VS Code ext"       task_vscode_extensions
-
-wait_tasks || true
-
-# ══════════════════════════════════════════════════════════════════════
-#  Summary
-# ══════════════════════════════════════════════════════════════════════
-
-elapsed=$((SECONDS - TOTAL_START))
-if [ "$TOTAL_FAILURES" -eq 0 ]; then
-    printf "\n${GREEN}${BOLD}Refresh complete in ${elapsed}s! (${TOTAL_SUCCEEDED} succeeded)${NC}\n"
-    printf "${DIM}Run 'source ~/.zshrc' if environment variables changed.${NC}\n"
-    exit 0
-else
-    printf "\n${YELLOW}${BOLD}Refresh finished in ${elapsed}s (${TOTAL_SUCCEEDED} succeeded, ${TOTAL_FAILURES} failed).${NC}\n"
-    printf "${DIM}Review failed tasks above. Run 'source ~/.zshrc' if environment variables changed.${NC}\n"
-    exit 1
-fi
+if __name__ == "__main__":
+    sys.exit(main())
