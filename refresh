@@ -1,8 +1,18 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "rich>=13.7.0",
+# ]
+# ///
 """
-refresh — Real-time animated TUI dashboard for updating the entire macOS system.
-Zero external dependencies (uses Python standard library asyncio + ANSI DEC 2026 synchronized output).
+refresh — Full-screen real-time animated TUI dashboard for updating macOS.
+Uses Rich Live with the terminal's Alternate Screen Buffer (screen=True) so
+frames never scroll or pollute terminal history, then prints a single clean
+summary table upon completion.
 """
+
+from __future__ import annotations
 
 import asyncio
 import fcntl
@@ -11,12 +21,22 @@ import os
 import re
 import shutil
 import signal
-import subprocess
 import sys
 import time
-import unicodedata
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Callable, Coroutine, List, Optional
+from typing import Callable, Coroutine, Deque, List, Optional
+
+from rich import box
+from rich.align import Align
+from rich.console import Console, Group, RenderableType
+from rich.layout import Layout
+from rich.live import Live
+from rich.panel import Panel
+from rich.progress_bar import ProgressBar
+from rich.spinner import Spinner
+from rich.table import Table
+from rich.text import Text
 
 # ── Non-interactive environment (prevent background /dev/tty hangs) ───
 os.environ["LANG"] = "en_US.UTF-8"
@@ -30,32 +50,6 @@ os.environ["HOMEBREW_NO_ENV_HINTS"] = "1"
 os.environ["HOMEBREW_NO_INSTALL_CLEANUP"] = "1"
 os.environ["HOMEBREW_NO_AUTO_UPDATE"] = "1"
 
-# ── ANSI & Terminal Control ───────────────────────────────────────────
-ESC = "\033["
-HIDE_CURSOR = f"{ESC}?25l"
-SHOW_CURSOR = f"{ESC}?25h"
-SYNC_START = f"{ESC}?2026h"
-SYNC_END = f"{ESC}?2026l"
-CLEAR_LINE = f"{ESC}2K"
-
-RESET = f"{ESC}0m"
-BOLD = f"{ESC}1m"
-DIM = f"{ESC}2m"
-
-# Nord-inspired TrueColor ANSI palette
-C_CYAN = f"{ESC}38;2;136;192;208m"     # #88C0D0
-C_BLUE = f"{ESC}38;2;129;161;193m"     # #81A1C1
-C_GREEN = f"{ESC}38;2;163;190;140m"    # #A3BE8C
-C_YELLOW = f"{ESC}38;2;235;203;139m"   # #EBCB8B
-C_RED = f"{ESC}38;2;191;97;106m"       # #BF616A
-C_PURPLE = f"{ESC}38;2;180;142;173m"   # #B48EAD
-C_GRAY = f"{ESC}38;2;108;118;138m"     # #6C768A
-C_DARK = f"{ESC}38;2;67;76;94m"        # #434C5E
-C_WHITE = f"{ESC}38;2;236;239;244m"    # #ECEFF4
-
-SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-BLOCKS = [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"]
-
 ANSI_ESCAPE_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
 
@@ -63,63 +57,22 @@ def strip_ansi(text: str) -> str:
     return ANSI_ESCAPE_RE.sub("", text)
 
 
-def char_width(ch: str) -> int:
-    if unicodedata.combining(ch) or ch in ("\ufe0f", "\ufe0e", "\u200d"):
-        return 0
-    if unicodedata.east_asian_width(ch) in ("W", "F"):
-        return 2
-    return 1
-
-
-def display_width(text: str) -> int:
-    return sum(char_width(c) for c in strip_ansi(text))
-
-
-def fit_width(text: str, target_w: int) -> str:
-    clean = "".join(c for c in strip_ansi(text) if c >= " " and ch_printable(c))
-    cur_w = 0
-    out = []
-    for c in clean:
-        w = char_width(c)
-        if cur_w + w > target_w - 1 and display_width(clean) > target_w:
-            out.append("…")
-            cur_w += 1
-            break
-        out.append(c)
-        cur_w += w
-    return "".join(out) + (" " * max(0, target_w - cur_w))
-
-
-def ch_printable(c: str) -> bool:
-    return c not in ("\r", "\n", "\t", "\ufe0f", "\ufe0e")
-
-
-@dataclass
-class StepSpec:
-    label: str
-    cmd: List[str]
-    weight: float = 1.0
-    env: Optional[dict] = None
-    cwd: Optional[str] = None
-    ignore_error: bool = False
-
-
 @dataclass
 class TaskState:
     id: str
     name: str
+    category: str
     deps: List[str] = field(default_factory=list)
-    status: str = "queued"  # queued, waiting, running, done, failed, skipped
-    progress: float = 0.0   # 0.0 to 1.0
-    target_progress: float = 0.0
+    status: str = "queued"  # queued, waiting, running, done, failed
+    progress: float = 0.0   # 0.0 to 100.0
     step_label: str = "Queued"
     last_line: str = ""
     logs: List[str] = field(default_factory=list)
     start_time: Optional[float] = None
     end_time: Optional[float] = None
-    expected_duration: float = 8.0
     runner: Optional[Callable[["TaskState"], Coroutine]] = None
     proc: Optional[asyncio.subprocess.Process] = None
+    spinner: Spinner = field(default_factory=lambda: Spinner("dots", style="bold bright_cyan"))
 
     @property
     def elapsed(self) -> float:
@@ -131,48 +84,49 @@ class TaskState:
 
 class RefreshDashboard:
     def __init__(self) -> None:
+        self.console = Console()
         self.home = os.path.expanduser("~")
         self.dotfiles_dir = os.path.join(self.home, "dotfiles")
         self.tasks: List[TaskState] = []
         self.task_map: dict[str, TaskState] = {}
         self.npm_lock = asyncio.Lock()
         self.start_time = time.monotonic()
-        self.frame_idx = 0
-        self.rendered_lines = 0
-        self.is_tty = sys.stdout.isatty()
-        self.cancelled = False
+        self.activity_feed: Deque[tuple[str, str, str]] = deque(maxlen=6)
 
     def add_task(
         self,
         task_id: str,
         name: str,
+        category: str,
         runner: Callable[[TaskState], Coroutine],
         deps: Optional[List[str]] = None,
-        expected_duration: float = 8.0,
     ) -> None:
         t = TaskState(
             id=task_id,
             name=name,
+            category=category,
             deps=deps or [],
             runner=runner,
-            expected_duration=expected_duration,
         )
         self.tasks.append(t)
         self.task_map[task_id] = t
+
+    def log_event(self, task_name: str, message: str, style: str = "dim") -> None:
+        ts = f"{time.monotonic() - self.start_time:5.1f}s"
+        self.activity_feed.append((ts, task_name, f"[{style}]{ RichEscape(message) }[/]"))
 
     async def run_cmd(
         self,
         task: TaskState,
         cmd: List[str],
         step_label: str,
-        base_progress: float,
-        span_progress: float,
+        base_pct: float,
+        span_pct: float,
         expected_sec: float = 5.0,
         cwd: Optional[str] = None,
         env_overrides: Optional[dict] = None,
     ) -> int:
         task.step_label = step_label
-        task.target_progress = base_progress + span_progress * 0.88
         env = os.environ.copy()
         if env_overrides:
             env.update(env_overrides)
@@ -204,11 +158,13 @@ class RefreshDashboard:
                     if line:
                         task.last_line = line
                         task.logs.append(line)
+                        self.log_event(task.name, line, "cyan")
             if buf:
                 line = strip_ansi(buf.decode("utf-8", errors="replace")).strip()
                 if line:
                     task.last_line = line
                     task.logs.append(line)
+                    self.log_event(task.name, line, "cyan")
 
         reader_task = asyncio.create_task(read_stream())
         try:
@@ -218,13 +174,13 @@ class RefreshDashboard:
                 ratio = 1.0 - math.exp(-dt / max(0.5, expected_sec))
                 task.progress = max(
                     task.progress,
-                    base_progress + span_progress * min(0.92, ratio * 0.90),
+                    base_pct + span_pct * min(0.92, ratio * 0.90),
                 )
             await reader_task
         finally:
             task.proc = None
 
-        task.progress = base_progress + span_progress
+        task.progress = base_pct + span_pct
         return proc.returncode or 0
 
     # ── Task Implementations ──────────────────────────────────────────
@@ -232,10 +188,9 @@ class RefreshDashboard:
     async def task_dotfiles(self, t: TaskState) -> None:
         if not os.path.isdir(os.path.join(self.dotfiles_dir, ".git")):
             t.last_line = "~/dotfiles not found, skipped"
-            t.progress = 1.0
+            t.progress = 100.0
             return
 
-        # Reset lazy-lock.json if submodule exists
         sub_git = os.path.join(self.dotfiles_dir, "astronvim_template", ".git")
         if os.path.exists(sub_git):
             await self.run_cmd(
@@ -243,7 +198,7 @@ class RefreshDashboard:
                 ["git", "-C", os.path.join(self.dotfiles_dir, "astronvim_template"), "checkout", "--", "lazy-lock.json"],
                 "Reset lockfile",
                 0.0,
-                0.10,
+                10.0,
                 1.0,
             )
 
@@ -251,8 +206,8 @@ class RefreshDashboard:
             t,
             ["git", "-C", self.dotfiles_dir, "pull", "--rebase", "--autostash"],
             "git pull --rebase",
-            0.10,
-            0.50,
+            10.0,
+            50.0,
             2.5,
         )
         if rc != 0:
@@ -263,8 +218,8 @@ class RefreshDashboard:
                 t,
                 ["git", "-C", self.dotfiles_dir, "submodule", "update", "--init", "--recursive", "--force"],
                 "git submodule update",
-                0.60,
-                0.15,
+                60.0,
+                15.0,
                 2.0,
             )
             if rc != 0:
@@ -273,7 +228,7 @@ class RefreshDashboard:
         symlink_sh = os.path.join(self.dotfiles_dir, "symlink.sh")
         if os.path.isfile(symlink_sh):
             os.chmod(symlink_sh, 0o755)
-            rc = await self.run_cmd(t, [symlink_sh], "Linking dotfiles", 0.75, 0.25, 1.0)
+            rc = await self.run_cmd(t, [symlink_sh], "Linking dotfiles", 75.0, 25.0, 1.0)
             if rc != 0:
                 raise RuntimeError("symlink.sh failed")
 
@@ -285,7 +240,7 @@ class RefreshDashboard:
             ["brew", "update"],
             "brew update",
             0.0,
-            0.22,
+            22.0,
             4.0,
             env_overrides={"HOMEBREW_NO_AUTO_UPDATE": "0"},
         )
@@ -296,8 +251,8 @@ class RefreshDashboard:
             t,
             ["brew", "upgrade", "--greedy-auto-updates"],
             "brew upgrade",
-            0.22,
-            0.40,
+            22.0,
+            40.0,
             8.0,
         )
         if rc != 0:
@@ -309,8 +264,8 @@ class RefreshDashboard:
                 t,
                 ["brew", "bundle", "check", f"--file={brewfile}"],
                 "brew bundle check",
-                0.62,
-                0.10,
+                62.0,
+                10.0,
                 1.5,
             )
             if chk != 0:
@@ -318,20 +273,20 @@ class RefreshDashboard:
                     t,
                     ["brew", "bundle", "install", f"--file={brewfile}", "--no-upgrade"],
                     "brew bundle install",
-                    0.72,
-                    0.10,
+                    72.0,
+                    10.0,
                     5.0,
                 )
                 if rc != 0:
                     raise RuntimeError("brew bundle install failed")
         else:
-            t.progress = 0.82
+            t.progress = 82.0
 
-        rc = await self.run_cmd(t, ["brew", "autoremove"], "brew autoremove", 0.82, 0.08, 1.5)
+        rc = await self.run_cmd(t, ["brew", "autoremove"], "brew autoremove", 82.0, 8.0, 1.5)
         if rc != 0:
             raise RuntimeError("brew autoremove failed")
 
-        rc = await self.run_cmd(t, ["brew", "cleanup", "--prune=all"], "brew cleanup", 0.90, 0.10, 2.5)
+        rc = await self.run_cmd(t, ["brew", "cleanup", "--prune=all"], "brew cleanup", 90.0, 10.0, 2.5)
         if rc != 0:
             raise RuntimeError("brew cleanup failed")
 
@@ -343,7 +298,7 @@ class RefreshDashboard:
             ["zsh", "-c", 'source "$HOME/.zgenom/zgenom.zsh" && zgenom selfupdate'],
             "zgenom selfupdate",
             0.0,
-            0.35,
+            35.0,
             2.0,
         )
         if rc != 0:
@@ -353,8 +308,8 @@ class RefreshDashboard:
             t,
             ["zsh", "-c", 'source "$HOME/.zgenom/zgenom.zsh" && zgenom update'],
             "zgenom update",
-            0.35,
-            0.45,
+            35.0,
+            45.0,
             3.5,
         )
         if rc != 0:
@@ -364,21 +319,21 @@ class RefreshDashboard:
             t,
             ["zsh", "-c", 'rm -f "$HOME"/.zcompdump* && source "$HOME/.zshrc" >/dev/null 2>&1 || true'],
             "Rebuilding init & completions",
-            0.80,
-            0.20,
+            80.0,
+            20.0,
             1.5,
         )
         t.last_line = "Plugins & completions updated"
 
     async def task_agy(self, t: TaskState) -> None:
-        rc = await self.run_cmd(t, ["agy", "update"], "agy update", 0.0, 1.0, 3.0)
+        rc = await self.run_cmd(t, ["agy", "update"], "agy update", 0.0, 100.0, 3.0)
         if rc != 0:
             raise RuntimeError("agy update failed")
         if not t.last_line:
             t.last_line = "Up to date"
 
     async def task_macos(self, t: TaskState) -> None:
-        rc = await self.run_cmd(t, ["softwareupdate", "-l"], "Checking Apple servers", 0.0, 1.0, 8.0)
+        rc = await self.run_cmd(t, ["softwareupdate", "-l"], "Checking Apple servers", 0.0, 100.0, 8.0)
         if rc != 0:
             raise RuntimeError("softwareupdate -l failed")
         for line in reversed(t.logs):
@@ -387,7 +342,7 @@ class RefreshDashboard:
                 break
 
     async def task_mas(self, t: TaskState) -> None:
-        rc = await self.run_cmd(t, ["mas", "upgrade"], "mas upgrade", 0.0, 1.0, 5.0)
+        rc = await self.run_cmd(t, ["mas", "upgrade"], "mas upgrade", 0.0, 100.0, 5.0)
         if rc != 0:
             raise RuntimeError("mas upgrade failed")
         if not t.last_line:
@@ -397,17 +352,17 @@ class RefreshDashboard:
         uv_path = shutil.which("uv") or ""
         real_uv = os.path.realpath(uv_path) if uv_path else ""
         if "Cellar/uv" not in real_uv and "homebrew" not in real_uv and not uv_path.startswith("/opt/homebrew/"):
-            rc = await self.run_cmd(t, ["uv", "self", "update"], "uv self update", 0.0, 0.25, 2.0)
+            rc = await self.run_cmd(t, ["uv", "self", "update"], "uv self update", 0.0, 25.0, 2.0)
             if rc != 0:
                 raise RuntimeError("uv self update failed")
         else:
-            t.progress = 0.25
+            t.progress = 25.0
 
-        rc = await self.run_cmd(t, ["uv", "python", "upgrade"], "uv python upgrade", 0.25, 0.35, 2.5)
+        rc = await self.run_cmd(t, ["uv", "python", "upgrade"], "uv python upgrade", 25.0, 35.0, 2.5)
         if rc != 0:
             raise RuntimeError("uv python upgrade failed")
 
-        rc = await self.run_cmd(t, ["uv", "tool", "upgrade", "--all"], "uv tool upgrade --all", 0.60, 0.40, 2.5)
+        rc = await self.run_cmd(t, ["uv", "tool", "upgrade", "--all"], "uv tool upgrade --all", 60.0, 40.0, 2.5)
         if rc != 0:
             raise RuntimeError("uv tool upgrade failed")
         if not t.last_line:
@@ -416,7 +371,7 @@ class RefreshDashboard:
     async def task_openclaw(self, t: TaskState) -> None:
         t.step_label = "Waiting for npm lock"
         async with self.npm_lock:
-            rc = await self.run_cmd(t, ["openclaw", "update", "--yes"], "openclaw update --yes", 0.0, 1.0, 5.0)
+            rc = await self.run_cmd(t, ["openclaw", "update", "--yes"], "openclaw update --yes", 0.0, 100.0, 5.0)
             if rc != 0:
                 raise RuntimeError("openclaw update failed")
         if not t.last_line:
@@ -441,30 +396,30 @@ class RefreshDashboard:
                 if pkg and pkg not in ("npm", "openclaw"):
                     pkgs.append(pkg)
 
-        t.progress = 0.25
+        t.progress = 25.0
         t.step_label = "Waiting for npm lock"
         async with self.npm_lock:
             if "Cellar/node" not in real_npm and "homebrew" not in real_npm:
-                rc = await self.run_cmd(t, ["npm", "install", "-g", "npm"], "npm self-update", 0.25, 0.35, 3.0)
+                rc = await self.run_cmd(t, ["npm", "install", "-g", "npm"], "npm self-update", 25.0, 25.0, 3.0)
                 if rc != 0:
                     raise RuntimeError("npm self-update failed")
             else:
-                t.progress = 0.50
+                t.progress = 50.0
 
             if pkgs:
                 rc = await self.run_cmd(
                     t,
                     ["npm", "update", "-g", *pkgs],
                     f"Updating {', '.join(pkgs)}",
-                    0.50,
-                    0.50,
+                    50.0,
+                    50.0,
                     4.0,
                 )
                 if rc != 0:
                     raise RuntimeError("npm update -g failed")
                 t.last_line = f"Updated {', '.join(pkgs)}"
             else:
-                t.progress = 1.0
+                t.progress = 100.0
                 t.last_line = "No extra global packages to update"
 
     async def task_pip(self, t: TaskState) -> None:
@@ -472,7 +427,7 @@ class RefreshDashboard:
         real_py = os.path.realpath(py_path) if py_path else ""
         if py_path == "/usr/bin/python3" or real_py.startswith("/Library/Developer/") or real_py.startswith("/System/"):
             await asyncio.sleep(0.15)
-            t.progress = 1.0
+            t.progress = 100.0
             t.last_line = "System Python (managed via uv)"
             return
 
@@ -490,11 +445,11 @@ class RefreshDashboard:
         )
         await proc.wait()
         if proc.returncode == 0:
-            t.progress = 1.0
+            t.progress = 100.0
             t.last_line = "PEP 668 externally managed (skipped)"
             return
 
-        rc = await self.run_cmd(t, ["python3", "-m", "pip", "install", "--upgrade", "pip"], "pip upgrade", 0.0, 1.0, 2.5)
+        rc = await self.run_cmd(t, ["python3", "-m", "pip", "install", "--upgrade", "pip"], "pip upgrade", 0.0, 100.0, 2.5)
         if rc != 0:
             raise RuntimeError("pip upgrade failed")
 
@@ -504,7 +459,7 @@ class RefreshDashboard:
             ["nvim", "--headless", "+Lazy! sync", "+qa"],
             "Lazy! sync",
             0.0,
-            1.0,
+            100.0,
             3.5,
         )
         if rc != 0:
@@ -520,17 +475,17 @@ class RefreshDashboard:
         out, _ = await proc.communicate()
         if not out.strip():
             await asyncio.sleep(0.15)
-            t.progress = 1.0
+            t.progress = 100.0
             t.last_line = "No extensions installed"
             return
 
-        rc = await self.run_cmd(t, ["gh", "extension", "upgrade", "--all"], "gh extension upgrade", 0.2, 0.8, 2.5)
+        rc = await self.run_cmd(t, ["gh", "extension", "upgrade", "--all"], "gh extension upgrade", 20.0, 80.0, 2.5)
         if rc != 0:
             raise RuntimeError("gh extension upgrade failed")
         t.last_line = "Extensions upgraded"
 
     async def task_vscode(self, t: TaskState) -> None:
-        rc = await self.run_cmd(t, ["code", "--update-extensions"], "code --update-extensions", 0.0, 1.0, 3.0)
+        rc = await self.run_cmd(t, ["code", "--update-extensions"], "code --update-extensions", 0.0, 100.0, 3.0)
         if rc != 0:
             raise RuntimeError("VS Code extension update failed")
         if not t.last_line:
@@ -539,7 +494,6 @@ class RefreshDashboard:
     # ── Orchestrator & DAG Scheduler ──────────────────────────────────
 
     async def execute_task(self, t: TaskState) -> None:
-        # Wait for dependencies
         while any(self.task_map[d].status in ("queued", "waiting", "running") for d in t.deps):
             dep_names = [self.task_map[d].name for d in t.deps if self.task_map[d].status in ("queued", "waiting", "running")]
             t.status = "waiting"
@@ -549,12 +503,14 @@ class RefreshDashboard:
         t.status = "running"
         t.start_time = time.monotonic()
         t.step_label = "Starting..."
+        self.log_event(t.name, "Started", "bright_blue")
         try:
             assert t.runner is not None
             await t.runner(t)
-            t.progress = 1.0
+            t.progress = 100.0
             t.status = "done"
             t.step_label = "Complete"
+            self.log_event(t.name, t.last_line or "Completed", "green")
         except asyncio.CancelledError:
             t.status = "failed"
             t.step_label = "Cancelled"
@@ -563,201 +519,220 @@ class RefreshDashboard:
             t.status = "failed"
             if not t.last_line:
                 t.last_line = str(exc)
+            self.log_event(t.name, f"Failed: {t.last_line}", "bold red")
         finally:
             t.end_time = time.monotonic()
 
-    # ── Smooth Unicode Progress Bar Renderer ──────────────────────────
+    # ── Rich Renderable Builder ───────────────────────────────────────
 
-    def format_bar(self, progress: float, width: int, status: str) -> str:
-        progress = max(0.0, min(1.0, progress))
-        total_eighths = int(round(progress * width * 8))
-        full_blocks = total_eighths // 8
-        rem = total_eighths % 8
-
-        filled = "█" * full_blocks
-        if full_blocks < width:
-            partial = BLOCKS[rem] if rem > 0 else "░"
-            empty = "░" * max(0, width - full_blocks - 1)
-        else:
-            partial = ""
-            empty = ""
-
-        if status == "done":
-            color = C_GREEN
-        elif status == "failed":
-            color = C_RED
-        elif status == "running":
-            color = C_CYAN
-        else:
-            color = C_DARK
-
-        return f"{color}{filled}{partial}{C_DARK}{empty}{RESET}"
-
-    def render_frame(self) -> None:
-        if not self.is_tty:
-            return
-
-        cols, _ = shutil.get_terminal_size((100, 30))
-        cols = max(72, min(cols, 120))
-        inner_w = cols - 4  # Inside " │ " and " │"
-
+    def build_renderable(self, final: bool = False) -> RenderableType:
         total_tasks = len(self.tasks)
         done_tasks = sum(1 for t in self.tasks if t.status in ("done", "failed"))
+        failed_tasks = sum(1 for t in self.tasks if t.status == "failed")
         running_tasks = sum(1 for t in self.tasks if t.status == "running")
-        overall_prog = sum(t.progress for t in self.tasks) / max(1, total_tasks)
+        overall_pct = sum(t.progress for t in self.tasks) / max(1, total_tasks)
         total_elapsed = time.monotonic() - self.start_time
-        spin = SPINNER_FRAMES[self.frame_idx % len(SPINNER_FRAMES)]
 
-        lines: List[str] = []
+        # 1. Header Summary Grid
+        header_grid = Table.grid(expand=True, padding=(0, 1))
+        header_grid.add_column(ratio=1)
+        header_grid.add_column(justify="right")
 
-        # Top border
-        lines.append(f" {C_DARK}╭{'─' * (cols - 2)}╮{RESET}")
-
-        # Header title + overall timer
-        title_left = f"{BOLD}{C_WHITE}SYSTEM REFRESH{RESET}"
         if done_tasks == total_tasks:
-            status_badge = d_count_str(self.tasks)
+            if failed_tasks == 0:
+                status_text = Text(f"✓ All {total_tasks} tasks complete", style="bold bright_green")
+            else:
+                status_text = Text(f"⚠ {done_tasks - failed_tasks} succeeded, {failed_tasks} failed", style="bold yellow")
         else:
-            status_badge = f"{C_CYAN}{spin}{RESET} {C_WHITE}{running_tasks} active{RESET} {C_GRAY}•{RESET} {C_WHITE}{done_tasks}/{total_tasks}{RESET}"
-        timer_str = f"{C_BLUE}{BOLD}{total_elapsed:5.1f}s{RESET}"
+            status_text = Text.assemble(
+                ("● ", "bold bright_cyan"),
+                (f"{running_tasks} active", "bold white"),
+                ("  •  ", "dim"),
+                (f"{done_tasks}/{total_tasks} finished", "white"),
+            )
 
-        right_part = f"{status_badge}   {timer_str}"
-        pad1 = max(1, inner_w - display_width(title_left) - display_width(right_part))
-        lines.append(f" {C_DARK}│{RESET} {title_left}{' ' * pad1}{right_part} {C_DARK}│{RESET}")
-
-        # Overall progress bar row
-        pct_str = f"{int(round(overall_prog * 100)):3d}%"
-        overall_label = "Overall  "
-        overall_bar_w = max(16, inner_w - len(overall_label) - 1 - len(pct_str))
-        overall_bar = self.format_bar(
-            overall_prog,
-            overall_bar_w,
-            "done" if done_tasks == total_tasks and all(t.status == "done" for t in self.tasks) else "running",
+        right_meta = Text.assemble(
+            status_text,
+            ("   ", ""),
+            (f"⏱ {total_elapsed:5.1f}s", "bold bright_blue"),
         )
-        lines.append(
-            f" {C_DARK}│{RESET} {C_GRAY}{overall_label}{RESET}{overall_bar} {BOLD}{C_WHITE}{pct_str}{RESET} {C_DARK}│{RESET}"
+        header_grid.add_row(
+            Text("⚡ SYSTEM REFRESH DASHBOARD", style="bold bright_white"),
+            right_meta,
         )
 
-        # Divider
-        lines.append(f" {C_DARK}├{'─' * (cols - 2)}┤{RESET}")
+        # 2. Overall Progress Bar Row
+        overall_bar_grid = Table.grid(expand=True, padding=(0, 1))
+        overall_bar_grid.add_column(width=10)
+        overall_bar_grid.add_column(ratio=1)
+        overall_bar_grid.add_column(width=6, justify="right")
 
-        # Task rows
-        name_w = 16
-        bar_w = 16
+        overall_bar = ProgressBar(
+            total=100.0,
+            completed=overall_pct,
+            complete_style="bright_green" if done_tasks == total_tasks and failed_tasks == 0 else "bright_cyan",
+            finished_style="bright_green",
+            pulse=not final and done_tasks < total_tasks,
+            pulse_style="bright_blue",
+        )
+        overall_bar_grid.add_row(
+            Text("Overall", style="bold dim"),
+            overall_bar,
+            Text(f"{overall_pct:3.0f}%", style="bold bright_white"),
+        )
+
+        # 3. Main Tasks Table
+        task_table = Table(
+            box=box.SIMPLE_HEAVY,
+            expand=True,
+            show_header=True,
+            header_style="bold dim",
+            pad_edge=True,
+            collapse_padding=True,
+        )
+        task_table.add_column("", width=2, no_wrap=True)
+        task_table.add_column("Task", width=17, no_wrap=True)
+        task_table.add_column("Stage", width=9, no_wrap=True)
+        task_table.add_column("Progress", width=22, no_wrap=True)
+        task_table.add_column("%", width=5, justify="right", no_wrap=True)
+        task_table.add_column("Time", width=7, justify="right", no_wrap=True)
+        task_table.add_column("Live Status / Output", ratio=1, no_wrap=True, overflow="ellipsis")
+
         for t in self.tasks:
             if t.status == "done":
-                icon = f"{C_GREEN}✓{RESET}"
-                name_col = f"{C_WHITE}{t.name:<{name_w}}{RESET}"
+                icon: RenderableType = Text("✓", style="bold bright_green")
+                name_txt = Text(t.name, style="white")
+                bar = ProgressBar(total=100.0, completed=100.0, width=20, complete_style="green", finished_style="bright_green")
+                pct_txt = Text("100%", style="green")
+                time_txt = Text(f"{t.elapsed:4.1f}s", style="dim")
+                detail_txt = Text(t.last_line or "Complete", style="dim")
             elif t.status == "failed":
-                icon = f"{C_RED}✗{RESET}"
-                name_col = f"{C_RED}{t.name:<{name_w}}{RESET}"
+                icon = Text("✗", style="bold bright_red")
+                name_txt = Text(t.name, style="bold bright_red")
+                bar = ProgressBar(total=100.0, completed=max(10.0, t.progress), width=20, complete_style="red")
+                pct_txt = Text(f"{t.progress:3.0f}%", style="red")
+                time_txt = Text(f"{t.elapsed:4.1f}s", style="red")
+                detail_txt = Text(t.last_line or "Failed", style="bright_red")
             elif t.status == "running":
-                icon = f"{C_CYAN}{spin}{RESET}"
-                name_col = f"{BOLD}{C_WHITE}{t.name:<{name_w}}{RESET}"
+                icon = t.spinner
+                name_txt = Text(t.name, style="bold bright_white")
+                bar = ProgressBar(
+                    total=100.0,
+                    completed=t.progress,
+                    width=20,
+                    complete_style="bright_cyan",
+                    pulse=True,
+                    pulse_style="bright_blue",
+                )
+                pct_txt = Text(f"{t.progress:3.0f}%", style="bold bright_cyan")
+                time_txt = Text(f"{t.elapsed:4.1f}s", style="bright_blue")
+                detail_str = f"{t.step_label} · {t.last_line}" if t.last_line else t.step_label
+                detail_txt = Text(detail_str, style="bright_cyan")
             else:
-                icon = f"{C_GRAY}⋯{RESET}"
-                name_col = f"{C_GRAY}{t.name:<{name_w}}{RESET}"
+                icon = Text("⏳", style="dim")
+                name_txt = Text(t.name, style="dim")
+                bar = ProgressBar(total=100.0, completed=0.0, width=20, style="grey23")
+                pct_txt = Text("  0%", style="dim")
+                time_txt = Text("   --", style="dim")
+                detail_txt = Text(t.step_label, style="dim italic")
 
-            bar = self.format_bar(t.progress, bar_w, t.status)
-            tpct = f"{int(round(t.progress * 100)):3d}%"
-            pct_col = f"{C_WHITE if t.status == 'running' else C_GRAY}{tpct}{RESET}"
+            cat_txt = Text(t.category, style="dim")
+            task_table.add_row(icon, name_txt, cat_txt, bar, pct_txt, time_txt, detail_txt)
 
-            if t.start_time is not None:
-                time_col = f"{C_BLUE if t.status == 'running' else C_GRAY}{t.elapsed:5.1f}s{RESET}"
-            else:
-                time_col = f"{C_DARK}   -- {RESET}"
+        components: List[RenderableType] = [
+            header_grid,
+            Text(""),
+            overall_bar_grid,
+            task_table,
+        ]
 
-            left_prefix = f"{icon} {name_col} {bar} {pct_col} {time_col}  "
-            avail_detail_w = max(8, inner_w - display_width(left_prefix))
+        # 4. Live Activity Stream Footer (shown while running in alternate screen)
+        if not final and self.activity_feed:
+            feed_table = Table.grid(expand=True, padding=(0, 1))
+            feed_table.add_column(width=7, style="dim")
+            feed_table.add_column(width=16, style="bold dim")
+            feed_table.add_column(ratio=1, no_wrap=True, overflow="ellipsis")
+            for ts, tname, msg in self.activity_feed:
+                feed_table.add_row(ts, tname, Text.from_markup(msg))
+            components.append(
+                Panel(
+                    feed_table,
+                    title="[dim]Live Activity Stream[/]",
+                    title_align="left",
+                    border_style="bright_black",
+                    box=box.ROUNDED,
+                    padding=(0, 1),
+                )
+            )
 
-            if t.status in ("done", "failed") and t.last_line:
-                raw_detail = t.last_line
-            elif t.status != "running":
-                raw_detail = t.step_label
-            else:
-                raw_detail = f"{t.step_label} · {t.last_line}" if t.last_line else t.step_label
-
-            detail_padded = fit_width(raw_detail, avail_detail_w)
-            detail_col = f"{C_RED if t.status == 'failed' else (C_GRAY if t.status != 'running' else C_BLUE)}{detail_padded}{RESET}"
-
-            row = f" {C_DARK}│{RESET} {left_prefix}{detail_col} {C_DARK}│{RESET}"
-            lines.append(row)
-
-        # Bottom border
-        lines.append(f" {C_DARK}╰{'─' * (cols - 2)}╯{RESET}")
-
-        out = [SYNC_START]
-        if self.rendered_lines > 0:
-            out.append(f"{ESC}{self.rendered_lines}A\r")
-        for line in lines:
-            out.append(f"{CLEAR_LINE}{line}\n")
-        out.append(SYNC_END)
-
-        sys.stdout.write("".join(out))
-        sys.stdout.flush()
-        self.rendered_lines = len(lines)
+        border_color = "bright_green" if (done_tasks == total_tasks and failed_tasks == 0) else ("yellow" if done_tasks == total_tasks else "bright_blue")
+        return Panel(
+            Group(*components),
+            border_style=border_color,
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
 
     async def run(self) -> int:
-        # Build task graph
-        self.add_task("dotfiles", "Dotfiles", self.task_dotfiles, deps=[], expected_duration=3.0)
+        # Build DAG task graph
+        self.add_task("dotfiles", "Dotfiles", "Phase 1", self.task_dotfiles, deps=[])
 
         if shutil.which("brew"):
-            self.add_task("homebrew", "Homebrew", self.task_homebrew, deps=["dotfiles"], expected_duration=12.0)
+            self.add_task("homebrew", "Homebrew", "Core", self.task_homebrew, deps=["dotfiles"])
         if os.path.isdir(os.path.join(self.home, ".zgenom")):
-            self.add_task("zgenom", "Zsh plugins", self.task_zgenom, deps=["dotfiles"], expected_duration=5.0)
+            self.add_task("zgenom", "Zsh plugins", "Core", self.task_zgenom, deps=["dotfiles"])
         if shutil.which("agy"):
-            self.add_task("agy", "Antigravity CLI", self.task_agy, deps=[], expected_duration=3.0)
+            self.add_task("agy", "Antigravity CLI", "Core", self.task_agy, deps=[])
         if shutil.which("mas"):
-            self.add_task("mas", "App Store apps", self.task_mas, deps=[], expected_duration=6.0)
+            self.add_task("mas", "App Store apps", "Core", self.task_mas, deps=[])
         if shutil.which("softwareupdate"):
-            self.add_task("macos", "macOS updates", self.task_macos, deps=[], expected_duration=10.0)
+            self.add_task("macos", "macOS updates", "Core", self.task_macos, deps=[])
 
         brew_dep = ["homebrew"] if "homebrew" in self.task_map else []
         if shutil.which("uv"):
-            self.add_task("uv", "UV + Python", self.task_uv, deps=brew_dep, expected_duration=4.0)
+            self.add_task("uv", "UV + Python", "Tools", self.task_uv, deps=brew_dep)
         if shutil.which("openclaw"):
-            self.add_task("openclaw", "OpenClaw", self.task_openclaw, deps=brew_dep, expected_duration=5.0)
+            self.add_task("openclaw", "OpenClaw", "Tools", self.task_openclaw, deps=brew_dep)
         if shutil.which("npm"):
-            self.add_task("npm", "npm globals", self.task_npm, deps=brew_dep, expected_duration=4.0)
+            self.add_task("npm", "npm globals", "Tools", self.task_npm, deps=brew_dep)
         if shutil.which("python3"):
-            self.add_task("pip", "pip", self.task_pip, deps=brew_dep, expected_duration=1.0)
+            self.add_task("pip", "pip", "Tools", self.task_pip, deps=brew_dep)
         if shutil.which("nvim"):
-            self.add_task("nvim", "Neovim plugins", self.task_neovim, deps=brew_dep, expected_duration=4.0)
+            self.add_task("nvim", "Neovim plugins", "Tools", self.task_neovim, deps=brew_dep)
         if shutil.which("gh"):
-            self.add_task("gh", "GitHub CLI ext", self.task_gh, deps=brew_dep, expected_duration=3.0)
+            self.add_task("gh", "GitHub CLI ext", "Tools", self.task_gh, deps=brew_dep)
         if shutil.which("code"):
-            self.add_task("vscode", "VS Code ext", self.task_vscode, deps=brew_dep, expected_duration=4.0)
-
-        if self.is_tty:
-            sys.stdout.write("\n" + HIDE_CURSOR)
-            sys.stdout.flush()
+            self.add_task("vscode", "VS Code ext", "Tools", self.task_vscode, deps=brew_dep)
 
         workers = [asyncio.create_task(self.execute_task(t)) for t in self.tasks]
 
-        try:
+        # Run inside Alternate Screen Buffer (screen=True) so zero scrollback pollution occurs
+        with Live(
+            self.build_renderable(final=False),
+            console=self.console,
+            screen=True,
+            refresh_per_second=15,
+        ) as live:
             while not all(w.done() for w in workers):
-                self.frame_idx += 1
-                self.render_frame()
+                live.update(self.build_renderable(final=False))
                 await asyncio.sleep(0.06)
             await asyncio.gather(*workers, return_exceptions=True)
-            self.frame_idx += 1
-            self.render_frame()
-        finally:
-            if self.is_tty:
-                sys.stdout.write(SHOW_CURSOR)
-                sys.stdout.flush()
+            live.update(self.build_renderable(final=False))
+            await asyncio.sleep(0.25)
 
-        # Print any failure logs clearly below the dashboard
+        # Print single static summary dashboard into primary scrollback buffer after exiting alternate screen
+        self.console.print(self.build_renderable(final=True))
+
         failures = [t for t in self.tasks if t.status == "failed"]
         if failures:
-            print(f"\n {C_RED}{BOLD}Failed Task Logs:{RESET}")
+            self.console.print("\n[bold bright_red]Failed Task Logs:[/]")
             for t in failures:
-                print(f" {C_RED}✗ {t.name}:{RESET}")
+                self.console.print(f"[bold red]✗ {t.name}:[/]")
                 for log_line in t.logs[-10:]:
-                    print(f"   {DIM}{log_line}{RESET}")
+                    self.console.print(f"  [dim]{RichEscape(log_line)}[/]")
             return 1
 
-        print(f" {C_GRAY}Run 'source ~/.zshrc' if shell configs changed.{RESET}")
+        self.console.print(" [dim]Run 'source ~/.zshrc' if shell configs changed.[/]")
         return 0
 
     def terminate_children(self) -> None:
@@ -772,12 +747,8 @@ class RefreshDashboard:
                         pass
 
 
-def d_count_str(tasks: List[TaskState]) -> str:
-    fails = sum(1 for t in tasks if t.status == "failed")
-    ok = sum(1 for t in tasks if t.status == "done")
-    if fails == 0:
-        return f"{C_GREEN}{BOLD}✓ All {ok} tasks complete{RESET}"
-    return f"{C_YELLOW}{BOLD}{ok} done, {fails} failed{RESET}"
+def RichEscape(text: str) -> str:
+    return text.replace("[", "\\[")
 
 
 def main() -> int:
@@ -786,7 +757,7 @@ def main() -> int:
     try:
         fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        print(f"{C_RED} ✗  Another 'refresh' instance is already running.{RESET}")
+        Console().print("[bold red] ✗  Another 'refresh' instance is already running.[/]")
         return 1
 
     os.ftruncate(lock_fd, 0)
@@ -811,9 +782,7 @@ def main() -> int:
         return loop.run_until_complete(dash.run())
     except (KeyboardInterrupt, asyncio.CancelledError):
         dash.terminate_children()
-        if dash.is_tty:
-            sys.stdout.write(SHOW_CURSOR + "\n")
-        print(f" {C_YELLOW}⚠ Refresh interrupted. Cleaned up background tasks.{RESET}")
+        Console().print("\n[bold yellow] ⚠  Refresh interrupted. Cleaned up background tasks.[/]")
         return 130
     finally:
         try:
