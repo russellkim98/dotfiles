@@ -51,11 +51,11 @@ fi
 # =================================================================
 
 # =================================================================
-# uv (Python toolchain)
+# Local Binaries & uv (Python toolchain)
 # =================================================================
 
-export UV_HOME=$HOME/.uv
-export PATH=$UV_HOME/bin:$PATH
+export UV_HOME="$HOME/.uv"
+export PATH="$HOME/.local/bin:$UV_HOME/bin:$PATH"
 
 # =================================================================
 # Aliases and Functions for Enhanced File Viewing

@@ -18,14 +18,15 @@ if [[ "${1:-}" == "--dry-run" ]]; then
 fi
 
 # --- Configuration ---
-# Files/Folders to completely ignore
+# Files/Folders to completely ignore from $HOME root auto-linking
 declare -A IGNORES
-IGNORES=( [.]=1 [..]=1 [.git]=1 [.githooks]=1 [.gitignore]=1 [.DS_Store]=1 [.macos]=1 [README.md]=1 [symlink.sh]=1 [setup.sh]=1 [Brewfile]=1 [astronvim_template]=1 [.zshrc]=1 [iterm2-theme.json]=1 [nord.itermcolors]=1 )
+IGNORES=( [.]=1 [..]=1 [.git]=1 [.githooks]=1 [.gitignore]=1 [.DS_Store]=1 [.macos]=1 [README.md]=1 [symlink.sh]=1 [setup.sh]=1 [refresh]=1 [Brewfile]=1 [astronvim_template]=1 [.zshrc]=1 [iterm2-theme.json]=1 [nord.itermcolors]=1 )
 
 # Explicit mapping for things that don't map 1:1 (Source -> Target relative to HOME)
 # Format: "source_in_repo:target_path_from_home"
 declare -A MAPPINGS
 MAPPINGS[astronvim_template]=".config/nvim"
+MAPPINGS[refresh]=".local/bin/refresh"
 
 # --- Core Linker Logic ---
 link_file() {
@@ -64,6 +65,19 @@ link_file() {
 }
 
 info "🔗 synchronizing dotfiles..."
+
+# 0. Clean up any legacy symlinks in $HOME for ignored repo files
+for ignored_name in "${(@k)IGNORES}"; do
+  [[ "$ignored_name" == "." || "$ignored_name" == ".." || "$ignored_name" == ".zshrc" ]] && continue
+  if [ -L "$HOME/$ignored_name" ]; then
+    if $DRY_RUN; then
+      info "[DRY] Would remove stale symlink: $HOME/$ignored_name"
+    else
+      rm -f "$HOME/$ignored_name"
+      info "Removed stale symlink: $HOME/$ignored_name"
+    fi
+  fi
+done
 
 # 1. Process Automatic Links (files in root)
 for src_path in "$SCRIPT_DIR"/.* "$SCRIPT_DIR"/*; do
