@@ -115,17 +115,6 @@ export EDITOR="nvim"
 export VISUAL="nvim"
 
 # =================================================================
-# Prevent Idle System/Network Sleep While Terminal is Open
-# =================================================================
-# Allows display to turn off normally (and lid-close sleep to work),
-# but prevents macOS from suspending CPU/network streams while idle.
-if [[ -o interactive ]] && command -v caffeinate &> /dev/null; then
-    if ! pgrep -x caffeinate &> /dev/null; then
-        caffeinate -i -w "$$" &!
-    fi
-fi
-
-# =================================================================
 # Prompt Initialization
 # =================================================================
 if command -v starship &> /dev/null; then
