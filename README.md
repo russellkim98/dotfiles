@@ -20,7 +20,7 @@ This repository contains the configuration files (dotfiles) that define my macOS
 * **`refresh`**: Single-command system updater (linked to `~/.local/bin/refresh`). Runs a 3-phase pipeline:
   1. **Phase 1 (Sequential)**: Pulls `~/dotfiles` and re-links configurations via `symlink.sh`.
   2. **Phase 2 (Parallel)**: Updates Homebrew (`brew update`, `upgrade --greedy-auto-updates`, `bundle`, `autoremove`, `cleanup`), Zsh plugins (`zgenom`), Antigravity CLI (`agy`), App Store apps (`mas`), and checks macOS software updates.
-  3. **Phase 3 (Parallel, post-Homebrew)**: Updates `uv` Python versions & tools, OpenClaw, global `npm` packages, `pip`, Neovim (`Lazy`), GitHub CLI extensions, and VS Code extensions.
+  3. **Phase 3 (Parallel, post-Homebrew)**: Updates `uv` Python versions & tools, global `npm` packages, `pip`, Neovim (`Lazy`), GitHub CLI extensions, and VS Code extensions.
 * **`symlink.sh`**: Scans the repo, symlinks dotfiles/mappings (`~/.config/nvim`, `~/.local/bin/refresh`) into `$HOME`, and cleans up stale symlinks.
 * **`.zshrc`**: Zsh configuration with `zgenom`, `fzf-tab`, `zoxide`, `bat`, `eza`, and `starship`.
 * **`Brewfile`**: Consolidated inventory of Homebrew formulae, casks, and Nerd Fonts.

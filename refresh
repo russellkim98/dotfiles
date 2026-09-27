@@ -368,15 +368,6 @@ class RefreshDashboard:
         if not t.last_line:
             t.last_line = "Python & uv tools up to date"
 
-    async def task_openclaw(self, t: TaskState) -> None:
-        t.step_label = "Waiting for npm lock"
-        async with self.npm_lock:
-            rc = await self.run_cmd(t, ["openclaw", "update", "--yes"], "openclaw update --yes", 0.0, 100.0, 5.0)
-            if rc != 0:
-                raise RuntimeError("openclaw update failed")
-        if not t.last_line:
-            t.last_line = "OpenClaw up to date"
-
     async def task_npm(self, t: TaskState) -> None:
         npm_path = shutil.which("npm") or ""
         real_npm = os.path.realpath(npm_path) if npm_path else ""
@@ -393,11 +384,10 @@ class RefreshDashboard:
         for p in lines:
             if "/node_modules/" in p:
                 pkg = p.split("/node_modules/")[-1].strip()
-                if pkg and pkg not in ("npm", "openclaw"):
+                if pkg and pkg != "npm":
                     pkgs.append(pkg)
 
         t.progress = 25.0
-        t.step_label = "Waiting for npm lock"
         async with self.npm_lock:
             if "Cellar/node" not in real_npm and "homebrew" not in real_npm:
                 rc = await self.run_cmd(t, ["npm", "install", "-g", "npm"], "npm self-update", 25.0, 25.0, 3.0)
@@ -687,8 +677,6 @@ class RefreshDashboard:
         brew_dep = ["homebrew"] if "homebrew" in self.task_map else []
         if shutil.which("uv"):
             self.add_task("uv", "UV + Python", "Tools", self.task_uv, deps=brew_dep)
-        if shutil.which("openclaw"):
-            self.add_task("openclaw", "OpenClaw", "Tools", self.task_openclaw, deps=brew_dep)
         if shutil.which("npm"):
             self.add_task("npm", "npm globals", "Tools", self.task_npm, deps=brew_dep)
         if shutil.which("python3"):
