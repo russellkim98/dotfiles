@@ -1,3 +1,8 @@
+# --- Locale (Prevent GNU gettext fallback to ko-KR from AppleLanguages) ---
+export LANG="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
+export LANGUAGE="en_US:en"
+
 # --- Homebrew Shellenv ---
 if [[ $(uname -m) == 'arm64' ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null)"
@@ -108,6 +113,17 @@ alias v="nvim"
 
 export EDITOR="nvim"
 export VISUAL="nvim"
+
+# =================================================================
+# Prevent Idle System/Network Sleep While Terminal is Open
+# =================================================================
+# Allows display to turn off normally (and lid-close sleep to work),
+# but prevents macOS from suspending CPU/network streams while idle.
+if [[ -o interactive ]] && command -v caffeinate &> /dev/null; then
+    if ! pgrep -x caffeinate &> /dev/null; then
+        caffeinate -i -w "$$" &!
+    fi
+fi
 
 # =================================================================
 # Prompt Initialization

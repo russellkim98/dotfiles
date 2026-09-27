@@ -9,12 +9,20 @@
 set -uo pipefail
 
 # ── Non-interactive environment (prevent background /dev/tty hangs) ───
+export LANG="en_US.UTF-8"
+export LC_ALL="en_US.UTF-8"
+export LANGUAGE="en_US:en"
 export NONINTERACTIVE=1
 export CI=1
 export GIT_TERMINAL_PROMPT=0
 export GIT_SSH_COMMAND="ssh -o BatchMode=yes"
 export HOMEBREW_NO_ENV_HINTS=1
 export HOMEBREW_NO_INSTALL_CLEANUP=1
+
+# Prevent macOS from sleeping while refresh is running
+if command -v caffeinate >/dev/null 2>&1; then
+    caffeinate -i -w "$$" &
+fi
 
 # ── Colors & formatting ───────────────────────────────────────────────
 BLUE='\033[1;34m'    GREEN='\033[1;32m'   YELLOW='\033[1;33m'
@@ -148,6 +156,18 @@ task_dotfiles() {
     if [ -f "$dotfiles_dir/symlink.sh" ]; then
         chmod +x "$dotfiles_dir/symlink.sh"
         "$dotfiles_dir/symlink.sh"
+    fi
+    if [ -d "/Applications/iTerm.app" ] && [ -f "$dotfiles_dir/iterm2-theme.json" ]; then
+        local iterm_dir="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
+        mkdir -p "$iterm_dir" 2>/dev/null || true
+        python3 -c '
+import sys, json
+with open(sys.argv[1]) as f:
+    profile = json.load(f)
+profile["Dynamic Profile Parent Name"] = "Default"
+with open(sys.argv[2], "w") as out:
+    json.dump({"Profiles": [profile]}, out, indent=2)
+' "$dotfiles_dir/iterm2-theme.json" "$iterm_dir/dotfiles-profile.json" 2>/dev/null || true
     fi
 }
 

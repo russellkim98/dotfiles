@@ -3,8 +3,8 @@
 # Concise and Less Intrusive macOS Defaults Script
 
 # Close any open System Preferences panes so changes can take effect immediately
-osascript -e 'if application "System Preferences" is running then tell application "System Preferences" to quit'
-osascript -e 'if application "System Settings" is running then tell application "System Settings" to quit'
+osascript -e 'if application "System Preferences" is running then tell application "System Preferences" to quit' 2>/dev/null || true
+osascript -e 'if application "System Settings" is running then tell application "System Settings" to quit' 2>/dev/null || true
 
 # --- Essential Quality-of-Life UI Tweaks ---
 
@@ -17,20 +17,24 @@ defaults write NSGlobalDomain PMPrintingExpandedStateForPrint2 -bool true
 # 2. Automatically quit the printer app once print jobs complete
 defaults write com.apple.print.PrintingPrefs "Quit When Finished" -bool true
 
-# --- Optional/Subjective Preferences (Uncomment to enable) ---
+# 3. Prioritize US English in AppleLanguages so CLI tools using GNU gettext
+#    do not fall through "en-KR" into "ko-KR" (Korean)
+defaults write NSGlobalDomain AppleLanguages -array "en-US" "en-KR" "ko-KR"
 
-# Optional: Always show scrollbars (instead of auto-hiding)
-# defaults write NSGlobalDomain AppleShowScrollBars -string "Always"
-# Possible values: `WhenScrolling`, `Automatic`, `Always`
-
-# Optional: Save new documents locally (not to iCloud) by default
-# defaults write NSGlobalDomain NSDocumentSaveNewDocumentsToCloud -bool false
-
-# Optional: Enable faster keyboard repeat rates
-# KeyRepeat: Controls the rate of repetition (2 is fast, 15 is slow)
-# InitialKeyRepeat: Controls the delay before repetition starts (15 is fast, 120 is slow)
-# The values 2 and 15 are common for a highly responsive feel.
+# 4. Enable faster keyboard repeat rates and disable press-and-hold in terminals
 defaults write NSGlobalDomain KeyRepeat -int 2
 defaults write NSGlobalDomain InitialKeyRepeat -int 15
+
+# --- Power Management (Prevent aggressive 1-minute sleep from dropping dev/agent streams) ---
+# AC Power (-c): Never suspend CPU/network while plugged in; sleep display after 15 mins
+# Battery (-b):  Sleep display after 10 mins; suspend system after 20 mins
+if sudo -n true 2>/dev/null; then
+    sudo pmset -c displaysleep 15 sleep 0
+    sudo pmset -b displaysleep 10 sleep 20
+else
+    echo "Applying pmset power management settings (may prompt for sudo password)..."
+    sudo pmset -c displaysleep 15 sleep 0
+    sudo pmset -b displaysleep 10 sleep 20
+fi
 
 echo "macOS settings updated. Log out and log back in for all changes to take effect."
