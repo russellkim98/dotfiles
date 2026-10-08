@@ -12,7 +12,7 @@ warning() { printf "\033[1;33m%s\033[0m\n" "$1"; }
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DRY_RUN=false
 
-if [[ "$1" == "--dry-run" ]]; then
+if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN=true
   info "🔎 STARTING DRY RUN (No changes will be made)"
 fi
@@ -20,7 +20,7 @@ fi
 # --- Configuration ---
 # Files/Folders to completely ignore
 declare -A IGNORES
-IGNORES=( [.]=1 [..]=1 [.git]=1 [.githooks]=1 [.gitignore]=1 [.DS_Store]=1 [.macos]=1 [README.md]=1 [LICENSE]=1 [symlink.sh]=1 [deploy.sh]=1 [Brewfile]=1 [GEMINI.md]=1 [.github]=1 [astronvim_template]=1 [.zshrc]=1 )
+IGNORES=( [.]=1 [..]=1 [.git]=1 [.githooks]=1 [.gitignore]=1 [.DS_Store]=1 [.macos]=1 [README.md]=1 [symlink.sh]=1 [setup.sh]=1 [Brewfile]=1 [astronvim_template]=1 [.zshrc]=1 [iterm2-theme.json]=1 [nord.itermcolors]=1 )
 
 # Explicit mapping for things that don't map 1:1 (Source -> Target relative to HOME)
 # Format: "source_in_repo:target_path_from_home"
