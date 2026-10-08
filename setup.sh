@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup.sh - The One-Click Installer
-# Installs Xcode tools, Homebrew, packages, updates submodules, and links dotfiles.
+# Installs Xcode tools, Homebrew, packages, and links dotfiles.
 
 set -euo pipefail
 
@@ -45,7 +45,7 @@ brew bundle --file="$SCRIPT_DIR/Brewfile" --verbose
 
 # 3. Configure git hooks
 info "🔄 Configuring git hooks..."
-git config core.hooksPath .githooks
+git -C "$SCRIPT_DIR" config core.hooksPath .githooks
 
 # 4. Link Dotfiles (before zgenom so .zshrc is in place for interactive zsh)
 info "🔗 Linking dotfiles..."
@@ -73,6 +73,7 @@ if [ -d "/Applications/iTerm.app" ]; then
     info "🎨 Installing iTerm2 profile..."
     ITERM_PROFILES_DIR="$HOME/Library/Application Support/iTerm2/DynamicProfiles"
     mkdir -p "$ITERM_PROFILES_DIR"
+    ITERM_DOTFILES_GUID="0EAB8838-074A-4EB0-9967-7504022C69DD"
 
     # Wrap the profile JSON in Dynamic Profiles format
     python3 -c "
@@ -80,11 +81,13 @@ import sys, json
 with open(sys.argv[1]) as f:
     profile = json.load(f)
 profile['Dynamic Profile Parent Name'] = 'Default'
+# Distinct GUID: the exported profile's GUID collides with the static profile it came from
+profile['Guid'] = sys.argv[2]
 print(json.dumps({'Profiles': [profile]}, indent=2))
-" "$SCRIPT_DIR/iterm2-theme.json" > "$ITERM_PROFILES_DIR/dotfiles-profile.json"
+" "$SCRIPT_DIR/iterm2-theme.json" "$ITERM_DOTFILES_GUID" > "$ITERM_PROFILES_DIR/dotfiles-profile.json"
 
     # Set as default profile
-    defaults write com.googlecode.iterm2 "Default Bookmark Guid" "E7BCCD8D-730C-425D-A5DE-611342D95F3D"
+    defaults write com.googlecode.iterm2 "Default Bookmark Guid" "$ITERM_DOTFILES_GUID"
 
     success "iTerm2 profile installed."
 fi

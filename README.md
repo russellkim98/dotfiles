@@ -12,7 +12,7 @@ This repository contains the configuration files (dotfiles) that define my macOS
     ./setup.sh
     ```
 
-    *`setup.sh` automatically installs Homebrew, dependencies, updates submodules, and links config files.*
+    *`setup.sh` installs Homebrew and the Brewfile, links config files, sets up zgenom, the iTerm2 profile and macOS defaults.*
 
 ## Structure
 
@@ -20,16 +20,6 @@ This repository contains the configuration files (dotfiles) that define my macOS
 * **`.zshrc`**: The shell configuration. Sources itself cleanly.
 * **`Brewfile`**: The inventory of all installed software.
 * **`.macos`**: Minimalist "defaults write" settings for UI tweaks.
-* **`astronvim_template/`**: AstroNvim configuration (linked to `~/.config/nvim`).
-* **`nvim-custom/`**: Custom Neovim plugins overlaid on top of the AstroNvim template.
-
-## Custom Neovim Plugins
-
-The `astronvim_template/` directory is a git submodule tracking `AstroNvim/template`. To add custom plugins without modifying the submodule, place `.lua` files in `nvim-custom/plugins/`. The symlink script will link them into the AstroNvim plugins directory.
-
-Current custom plugins:
-- **cutlass.nvim** — Delete/change operations (`d`, `c`, `x`) no longer overwrite the clipboard. Use `m` as the dedicated cut key (`mm` to cut a line, `m$` to cut to end of line, etc.).
-
-## Automation
-
-* **Daily Updates:** A GitHub Action (`.github/workflows/submodules.yml`) runs daily to fetch the latest upstream changes for submodules (like AstroNvim) and commits them back to this repo.
+* **`astronvim_template/`**: AstroNvim configuration (linked to `~/.config/nvim`). Custom plugins live in `lua/plugins/` — e.g. **cutlass.nvim**, so `d`/`c`/`x` no longer overwrite the clipboard (`m` is the dedicated cut key).
+* **`iterm2-theme.json`**, **`nord.itermcolors`**: iTerm2 profile and color scheme, installed by `setup.sh`.
+* **`.githooks/post-merge`**: After `git pull`, re-links dotfiles and updates zsh plugins if `.zshrc` changed.
