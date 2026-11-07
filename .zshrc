@@ -120,3 +120,8 @@ export VISUAL="nvim"
 if command -v starship &> /dev/null; then
     eval "$(starship init zsh)"
 fi
+
+# Added by LM Studio CLI (lms)
+export PATH="$PATH:/Users/russellkim98/.lmstudio/bin"
+# End of LM Studio CLI section
+
