@@ -13,7 +13,7 @@
 # seconds (default 2h), so a crashed agent can't keep the Mac awake forever.
 
 emulate -L zsh
-setopt err_return no_unset pipe_fail
+# No err_return: hooks must never fail or block the agent, so the script always exits 0.
 
 dir="${TMPDIR:-/tmp}/agent-awake"
 mkdir -p "$dir"
@@ -44,7 +44,8 @@ release() {
 hold() {
   local id=$1 wpid=$2 max=$3
   release "$id"
-  caffeinate -i -w "$wpid" -t "$max" &!
+  # Detach from the caller's stdio: Claude Code waits for a hook's stdout to close.
+  caffeinate -i -w "$wpid" -t "$max" </dev/null >/dev/null 2>&1 &!
   print -r -- $! >| "$dir/$id.pid"
 }
 
