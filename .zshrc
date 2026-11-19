@@ -125,3 +125,7 @@ fi
 export PATH="$PATH:/Users/russellkim98/.lmstudio/bin"
 # End of LM Studio CLI section
 
+# =================================================================
+# Machine-local config (untracked; machine-specific env lives here, secrets in Keychain)
+# =================================================================
+[[ -r ~/.zshrc.local ]] && source ~/.zshrc.local
