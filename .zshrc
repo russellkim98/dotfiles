@@ -1,14 +1,4 @@
-# --- Locale (Prevent GNU gettext fallback to ko-KR from AppleLanguages) ---
-export LANG="en_US.UTF-8"
-export LC_ALL="en_US.UTF-8"
-export LANGUAGE="en_US:en"
-
-# --- Homebrew Shellenv ---
-if [[ $(uname -m) == 'arm64' ]]; then
-  eval "$(/opt/homebrew/bin/brew shellenv 2>/dev/null)"
-else
-  eval "$(/usr/local/bin/brew shellenv 2>/dev/null)"
-fi
+# Locale, Homebrew and ~/.local/bin are set in ~/.zshenv (all shells).
 
 # --- iTerm2 Shell Integration ---
 # This must be sourced for features like marks, badges, and directory tracking.
@@ -54,13 +44,6 @@ fi
 # =================================================================
 # End of Zgenom Configuration
 # =================================================================
-
-# =================================================================
-# Local Binaries & uv (Python toolchain)
-# =================================================================
-
-export UV_HOME="$HOME/.uv"
-export PATH="$HOME/.local/bin:$UV_HOME/bin:$PATH"
 
 # =================================================================
 # Aliases and Functions for Enhanced File Viewing
@@ -127,8 +110,24 @@ if command -v starship &> /dev/null; then
 fi
 
 # Added by LM Studio CLI (lms)
-export PATH="$PATH:/Users/russellkim98/.lmstudio/bin"
+path+=("$HOME/.lmstudio/bin")
 # End of LM Studio CLI section
+
+# =================================================================
+# Claude Code launchers + direnv
+# =================================================================
+# cs: projectless session in ~/claude.  cj: pick a project, load its .envrc, launch.
+# cr: resume the last session in this dir. direnv exec is needed because direnv's hook
+# runs at the prompt, not on a cd inside a function.
+cs() { cd ~/claude && claude "$@"; }
+cj() {
+  local d
+  d=$(print -l ~/code/mine/*(/N) ~/code/oss/*(/N) ~/dotfiles ~/personal ~/claude \
+      | fzf --height 40% --preview 'eza -1 --icons {}') || return
+  cd "$d" && direnv exec "$d" claude "$@"
+}
+alias cr='claude --continue'
+command -v direnv &> /dev/null && eval "$(direnv hook zsh)"
 
 # =================================================================
 # Machine-local config (untracked; machine-specific env lives here, secrets in Keychain)

@@ -24,6 +24,9 @@ brew "neovim"   # Prerequisite for AstroNvim
 brew "starship"
 brew "gitleaks"  # Secret scanner; .githooks/pre-commit blocks commits that contain secrets
 brew "mas"       # Mac App Store CLI; refresh upgrades App Store apps with it
+brew "gh"        # GitHub CLI
+brew "just"      # Command runner (justfile recipes)
+brew "direnv"    # Per-project env (.envrc reads secrets from Keychain); used by cj
 
 # --- Tools for AstroNvim (LSPs, Linters, Formatters) ---
 # These are highly recommended for a full-featured experience.
@@ -40,6 +43,10 @@ brew "tree"                # Directory tree visualization
 brew "uv"                  # Python packaging and virtual environment management
 brew "eza"                 # Modern replacement for 'ls' command
 brew "zoxide"              # Utility to provide FZF functionality
+
+# --- Apps (Casks) ---
+cask "iterm2"
+cask "visual-studio-code"
 
 # --- Fonts (Casks) ---
 cask "font-fira-code-nerd-font"
