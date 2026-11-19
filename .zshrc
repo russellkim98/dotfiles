@@ -111,6 +111,11 @@ fi
 # =================================================================
 alias v="nvim"
 
+# Keep the Mac from idle-sleeping while an agy session runs (the display still dims and the
+# lid still sleeps). agy has no hooks, so the hold lasts the session, not each turn.
+# Claude Code holds per turn via agent-awake hooks; the Claude app via its own setting.
+agy() { caffeinate -i command agy "$@"; }
+
 export EDITOR="nvim"
 export VISUAL="nvim"
 

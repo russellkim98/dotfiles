@@ -1,0 +1,84 @@
+#!/usr/bin/env -S uv run --quiet --script
+# /// script
+# requires-python = ">=3.10"
+# ///
+"""sleepwhy: who is keeping this Mac (or its display) awake right now?
+
+Parses `pmset -g assertions`, resolves "Created for PID" to process names, and sorts the
+holds into: agents (expected), macOS housekeeping (harmless), and suspects (stray audio
+streams, browser media and the like that block sleep for hours).
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+import sys
+
+SYSTEM_SLEEP = {"PreventUserIdleSystemSleep", "NoIdleSleepAssertion", "PreventSystemSleep"}
+DISPLAY_SLEEP = {"PreventUserIdleDisplaySleep", "NoDisplaySleepAssertion"}
+AGENTS = re.compile(r"^(caffeinate|Claude|claude|agy|Antigravity.*)$")
+# powerd's "display is on" hold just mirrors the display timer; UserIsActive is input.
+HOUSEKEEPING = re.compile(r"Prevent sleep while display is on|lastpowerassertionlinger")
+
+ENTRY = re.compile(
+    r"^\s+pid (\d+)\(([^)]*)\): \[[^\]]*\] (\d+:\d+:\d+) (\w+) named: \"(.*)\""
+)
+
+
+def proc_name(pid: str) -> str:
+    out = subprocess.run(["ps", "-o", "comm=", "-p", pid], capture_output=True, text=True)
+    name = out.stdout.strip()
+    return name.rsplit("/", 1)[-1] if name else f"pid {pid} (gone)"
+
+
+def main() -> int:
+    text = subprocess.run(["pmset", "-g", "assertions"], capture_output=True, text=True).stdout
+    holds: list[dict] = []
+    for line in text.splitlines():
+        m = ENTRY.match(line)
+        if m:
+            pid, owner, age, kind, name = m.groups()
+            holds.append({"pid": pid, "owner": owner, "age": age, "kind": kind, "name": name, "for": ""})
+        elif holds and (c := re.search(r"Created for PID: (\d+)", line)):
+            holds[-1]["for"] = f"{proc_name(c.group(1))} ({c.group(1)})"
+
+    relevant = [h for h in holds if h["kind"] in SYSTEM_SLEEP | DISPLAY_SLEEP]
+    groups = {"agent": [], "housekeeping": [], "suspect": []}
+    for h in relevant:
+        if AGENTS.match(h["owner"]):
+            groups["agent"].append(h)
+        elif HOUSEKEEPING.search(h["name"]):
+            groups["housekeeping"].append(h)
+        else:
+            groups["suspect"].append(h)
+
+    def show(title: str, items: list[dict]) -> None:
+        if not items:
+            return
+        print(title)
+        for h in items:
+            what = "system+display" if h["kind"] in DISPLAY_SLEEP else "idle sleep"
+            via = f"  for {h['for']}" if h["for"] else ""
+            print(f"  {h['age']:>9}  {h['owner']:<14} blocks {what:<14} {h['name'][:70]}{via}")
+
+    show("Agents (expected while working):", groups["agent"])
+    show("Suspects (not agents; these are what keep an idle Mac awake):", groups["suspect"])
+    show("macOS housekeeping (harmless):", groups["housekeeping"])
+
+    sus_sys = [h for h in groups["suspect"] if h["kind"] in SYSTEM_SLEEP]
+    sus_disp = [h for h in groups["suspect"] if h["kind"] in DISPLAY_SLEEP]
+    print()
+    if not relevant:
+        print("Nothing is holding the Mac awake: it will sleep on its normal timers.")
+    if sus_disp:
+        print("! The display won't dim: " + ", ".join(sorted({h["for"] or h["owner"] for h in sus_disp})))
+    if sus_sys:
+        print("! Idle sleep is blocked by non-agents: " + ", ".join(sorted({h["for"] or h["owner"] for h in sus_sys})))
+        if any(h["owner"] == "coreaudiod" for h in sus_sys):
+            print("  coreaudiod = an open audio stream: a paused-but-open media tab, a call app, or a mic listener.")
+    return 1 if (sus_sys or sus_disp) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

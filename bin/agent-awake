@@ -1,0 +1,99 @@
+#!/bin/zsh
+# agent-awake: keep the Mac from IDLE-sleeping only while an agent is working.
+#
+#   agent-awake start [ID] [--pid PID] [--max SECS]   take (or renew) the hold for ID
+#   agent-awake stop  [ID]                            release it
+#   agent-awake hook start|stop                       Claude Code hook mode: reads the
+#                                                     hook JSON on stdin, ID = session_id
+#   agent-awake status                                list live holds
+#
+# The hold is `caffeinate -i` (PreventUserIdleSystemSleep), so the display still dims
+# and locks on its normal timer, Touch ID still wakes it, and closing the lid still
+# sleeps. It also ends by itself when the agent process (PID) exits or after --max
+# seconds (default 2h), so a crashed agent can't keep the Mac awake forever.
+
+emulate -L zsh
+setopt err_return no_unset pipe_fail
+
+dir="${TMPDIR:-/tmp}/agent-awake"
+mkdir -p "$dir"
+
+# First ancestor that looks like the agent (claude, agy, node); falls back to the parent.
+agent_pid() {
+  local p=$PPID comm
+  while (( p > 1 )); do
+    comm=$(ps -o comm= -p $p 2>/dev/null) || break
+    case "${comm:t}" in
+      claude|agy|node|antigravity*) print -r -- $p; return ;;
+    esac
+    p=$(ps -o ppid= -p $p 2>/dev/null | tr -d ' ') || break
+  done
+  print -r -- $PPID
+}
+
+release() {
+  local f="$dir/$1.pid" pid
+  [[ -r $f ]] || return 0
+  pid=$(<"$f")
+  if [[ $(ps -o comm= -p $pid 2>/dev/null) == *caffeinate ]]; then
+    kill $pid 2>/dev/null || true
+  fi
+  rm -f "$f"
+}
+
+hold() {
+  local id=$1 wpid=$2 max=$3
+  release "$id"
+  caffeinate -i -w "$wpid" -t "$max" &!
+  print -r -- $! >| "$dir/$id.pid"
+}
+
+cmd=${1:-status}; shift 2>/dev/null || true
+case $cmd in
+  start)
+    local id=manual wpid="" max=7200
+    while (( $# )); do
+      case $1 in
+        --pid) wpid=$2; shift 2 ;;
+        --max) max=$2; shift 2 ;;
+        *) id=$1; shift ;;
+      esac
+    done
+    [[ -n $wpid ]] || wpid=$(agent_pid)
+    hold "$id" "$wpid" "$max"
+    ;;
+  stop)
+    release "${1:-manual}"
+    ;;
+  hook)
+    # Claude Code passes the event JSON on stdin; pull session_id without needing jq.
+    local json id
+    json=$(cat)
+    id=$(print -r -- "$json" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+    [[ -n $id ]] || id=claude-$PPID
+    case ${1:-} in
+      start) hold "$id" "$(agent_pid)" 7200 ;;
+      stop)  release "$id" ;;
+      *) print -u2 "usage: agent-awake hook start|stop"; return 2 ;;
+    esac
+    ;;
+  status)
+    local f pid n=0
+    for f in "$dir"/*.pid(N); do
+      pid=$(<"$f")
+      if [[ $(ps -o comm= -p $pid 2>/dev/null) == *caffeinate ]]; then
+        print -r -- "${f:t:r}  caffeinate pid $pid  ($(ps -o etime= -p $pid | tr -d ' '))"
+        (( ++n ))
+      else
+        rm -f "$f"
+      fi
+    done
+    (( n )) || print "no agent-awake holds"
+    ;;
+  *)
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+    return 2
+    ;;
+esac
+# Hooks must never block the agent: always succeed.
+return 0

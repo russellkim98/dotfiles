@@ -25,16 +25,14 @@ defaults write NSGlobalDomain AppleLanguages -array "en-US" "en-KR" "ko-KR"
 defaults write NSGlobalDomain KeyRepeat -int 2
 defaults write NSGlobalDomain InitialKeyRepeat -int 15
 
-# --- Power Management (Prevent aggressive 1-minute sleep from dropping dev/agent streams) ---
-# AC Power (-c): Never suspend CPU/network while plugged in; sleep display after 15 mins
-# Battery (-b):  Sleep display after 10 mins; suspend system after 20 mins
-if sudo -n true 2>/dev/null; then
-    sudo pmset -c displaysleep 15 sleep 0
-    sudo pmset -b displaysleep 10 sleep 20
-else
-    echo "Applying pmset power management settings (may prompt for sudo password)..."
-    sudo pmset -c displaysleep 15 sleep 0
-    sudo pmset -b displaysleep 10 sleep 20
-fi
+# --- Power Management ---
+# Idle sleep stays ON. With sleep 1 the Mac sleeps about a minute after the display does.
+# Agents keep it awake only while they work, via ~/.local/bin/agent-awake (caffeinate -i:
+# idle-sleep hold only, so the display still dims/locks and a closed lid still sleeps).
+# Battery: Power Nap off, which stops the ~15-minute dark wakes while asleep.
+# Never put `sleep 0` or `disablesleep 1` here. `sleepwhy` shows what is holding the Mac awake.
+echo "Applying pmset power settings (may prompt for sudo password)..."
+sudo pmset -c displaysleep 10 sleep 1 powernap 1
+sudo pmset -b displaysleep 2 sleep 1 powernap 0
 
 echo "macOS settings updated. Log out and log back in for all changes to take effect."
