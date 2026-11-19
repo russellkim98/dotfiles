@@ -10,6 +10,7 @@ whole dashboard (DAG, rendering, summary) runs against it. It checks that:
   - every scenario finishes without a failed row
   - the dotfiles row only fast-forwards, and anything else turns into a yellow warning
   - refresh never runs `git pull --rebase`, `--autostash`, `stash` or `container ... prune`
+  - `uv cache prune` is detached (refresh's own `uv run` holds the cache lock)
 
 Run: tests/refresh_smoke.py   (the pre-commit hook runs it when refresh is staged)
 """
@@ -105,6 +106,9 @@ def main() -> int:
                 continue
             bad = [c for c in calls if any(f in f" {c}" for f in FORBIDDEN)]
             pulled = [c for c in calls if " pull" in c]
+            fg_prune = [c for c in calls if "uv cache prune" in c and "nohup" not in c]
+            if fg_prune:
+                problems.append(f"{name}: foreground uv cache prune deadlocks on refresh's own uv lock: {fg_prune}")
             if got != want:
                 problems.append(f"{name}: dotfiles status {got!r}, expected {want!r} ({detail})")
             if bad:

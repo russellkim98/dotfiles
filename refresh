@@ -486,15 +486,21 @@ class RefreshDashboard:
     async def task_cleanup(self, t: TaskState) -> None:
         # Cache trims only. Never `container image prune`: it deletes the rkade-sync image.
         if shutil.which("uv"):
-            rc = await self.run_cmd(t, ["uv", "cache", "prune"], "uv cache prune", 0.0, 50.0, 3.0)
+            # refresh itself runs under `uv run --script`, which holds uv's cache lock until it
+            # exits, so a foreground prune waits on its own parent forever. Detach it instead:
+            # it starts pruning the moment refresh exits.
+            rc = await self.run_cmd(
+                t, ["/bin/sh", "-c", "nohup uv cache prune >/dev/null 2>&1 &"],
+                "uv cache prune (after exit)", 0.0, 50.0, 0.5,
+            )
             if rc != 0:
-                raise RuntimeError("uv cache prune failed")
+                raise RuntimeError("could not queue uv cache prune")
         t.progress = 50.0
         if shutil.which("npm"):
             rc = await self.run_cmd(t, ["npm", "cache", "clean", "--force"], "npm cache clean", 50.0, 50.0, 2.0)
             if rc != 0:
                 raise RuntimeError("npm cache clean failed")
-        t.last_line = "uv and npm caches trimmed"
+        t.last_line = "npm cache trimmed; uv prune runs after exit"
 
     # ── Orchestrator & DAG Scheduler ──────────────────────────────────
 
