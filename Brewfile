@@ -23,6 +23,7 @@ brew "tmux"
 brew "neovim"   # Prerequisite for AstroNvim
 brew "starship"
 brew "gitleaks"  # Secret scanner; .githooks/pre-commit blocks commits that contain secrets
+brew "mas"       # Mac App Store CLI; refresh upgrades App Store apps with it
 
 # --- Tools for AstroNvim (LSPs, Linters, Formatters) ---
 # These are highly recommended for a full-featured experience.

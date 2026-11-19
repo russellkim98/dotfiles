@@ -1,7 +1,14 @@
 #!/bin/zsh
-# Block commits that contain secrets. This repo is PUBLIC.
+# 1. If refresh or its test is staged, run the smoke test (fake subprocesses; runs nothing real).
+# 2. Block commits that contain secrets. This repo is PUBLIC.
 # Bypass only if you're sure it's a false positive: git commit --no-verify
 # (or add the finding's fingerprint to .gitleaksignore).
+if git diff --cached --name-only | grep -qE '^(refresh|tests/refresh_smoke\.py)$'; then
+  if ! ./tests/refresh_smoke.py; then
+    echo "pre-commit: refresh smoke test failed; fix refresh before committing." >&2
+    exit 1
+  fi
+fi
 if ! command -v gitleaks >/dev/null; then
   echo "pre-commit: gitleaks not installed (brew install gitleaks); refusing to commit to a public repo unscanned." >&2
   exit 1

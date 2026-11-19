@@ -70,6 +70,7 @@ class TaskState:
     logs: List[str] = field(default_factory=list)
     start_time: Optional[float] = None
     end_time: Optional[float] = None
+    warning: str = ""      # set by a runner: finished, but needs attention (yellow row)
     runner: Optional[Callable[["TaskState"], Coroutine]] = None
     proc: Optional[asyncio.subprocess.Process] = None
     spinner: Spinner = field(default_factory=lambda: Spinner("dots", style="bold bright_cyan"))
@@ -183,6 +184,18 @@ class RefreshDashboard:
         task.progress = base_pct + span_pct
         return proc.returncode or 0
 
+    async def capture(self, cmd: List[str], cwd: Optional[str] = None) -> tuple[int, str]:
+        """Run a quick command and return (rc, stdout) without touching the dashboard."""
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            cwd=cwd,
+        )
+        out, _ = await proc.communicate()
+        return proc.returncode or 0, out.decode("utf-8", errors="replace").strip()
+
     # ── Task Implementations ──────────────────────────────────────────
 
     async def task_dotfiles(self, t: TaskState) -> None:
@@ -202,16 +215,39 @@ class RefreshDashboard:
                 1.0,
             )
 
-        rc = await self.run_cmd(
-            t,
-            ["git", "-C", self.dotfiles_dir, "pull", "--rebase", "--autostash"],
-            "git pull --rebase",
-            10.0,
-            50.0,
-            2.5,
-        )
-        if rc != 0:
-            raise RuntimeError("git pull failed")
+        # Fast-forward only. refresh never rebases, merges or stashes unattended: on 2026-11-07
+        # an automatic `pull --rebase --autostash` replayed 10 unpushed commits with conflicts.
+        # Anything but a clean fast-forward becomes a yellow warning row and is left to you.
+        git = ["git", "-C", self.dotfiles_dir]
+        sync_note = ""
+        _, git_dir = await self.capture(git + ["rev-parse", "--absolute-git-dir"])
+        in_progress = [n for n in ("rebase-merge", "rebase-apply", "MERGE_HEAD", "CHERRY_PICK_HEAD")
+                       if git_dir and os.path.exists(os.path.join(git_dir, n))]
+        if in_progress:
+            t.warning = f"Repo mid-{in_progress[0].split('-')[0].split('_')[0].lower()}: finish it by hand"
+        else:
+            rc = await self.run_cmd(t, git + ["fetch", "--quiet", "origin"], "git fetch", 10.0, 30.0, 2.0)
+            if rc != 0:
+                t.warning = "git fetch failed (offline?); pull skipped"
+            else:
+                _, counts = await self.capture(git + ["rev-list", "--left-right", "--count", "HEAD...@{u}"])
+                ahead, behind = (int(x) for x in counts.split()) if counts else (0, 0)
+                _, dirty = await self.capture(git + ["status", "--porcelain", "--untracked-files=no"])
+                if ahead and behind:
+                    t.warning = f"Diverged: ahead {ahead}, behind {behind}; reconcile by hand"
+                elif behind and dirty:
+                    t.warning = f"Behind {behind} with uncommitted changes; pull by hand"
+                elif behind:
+                    rc = await self.run_cmd(t, git + ["pull", "--ff-only", "--quiet"], "git pull --ff-only", 40.0, 20.0, 2.0)
+                    if rc != 0:
+                        t.warning = "Fast-forward failed; pull by hand"
+                    else:
+                        sync_note = f"Pulled {behind} commit{'s' if behind > 1 else ''}"
+                elif ahead:
+                    t.warning = f"Ahead {ahead}: push when ready"
+                if not t.warning and not sync_note:
+                    sync_note = "Up to date" + (" (uncommitted changes)" if dirty else "")
+        t.progress = max(t.progress, 60.0)
 
         if os.path.isfile(os.path.join(self.dotfiles_dir, ".gitmodules")):
             rc = await self.run_cmd(
@@ -232,7 +268,7 @@ class RefreshDashboard:
             if rc != 0:
                 raise RuntimeError("symlink.sh failed")
 
-        t.last_line = "Synced & linked"
+        t.last_line = t.warning or f"{sync_note}, linked"
 
     async def task_homebrew(self, t: TaskState) -> None:
         rc = await self.run_cmd(
@@ -342,11 +378,25 @@ class RefreshDashboard:
                 break
 
     async def task_mas(self, t: TaskState) -> None:
-        rc = await self.run_cmd(t, ["mas", "upgrade"], "mas upgrade", 0.0, 100.0, 5.0)
+        # mas 7 needs root to upgrade and refresh has no TTY for a password prompt, so list
+        # first (no root), then upgrade only if sudo is already cached; otherwise warn.
+        rc = await self.run_cmd(t, ["mas", "outdated"], "mas outdated", 0.0, 30.0, 4.0)
+        if rc != 0:
+            raise RuntimeError("mas outdated failed")
+        outdated = [l for l in t.logs if l.strip()[:1].isdigit()]
+        if not outdated:
+            t.last_line = "App Store apps up to date"
+            return
+        n = len(outdated)
+        sudo_ok, _ = await self.capture(["sudo", "-n", "true"])
+        if sudo_ok != 0:
+            t.warning = f"{n} App Store update{'s' if n > 1 else ''}: run `sudo mas upgrade`"
+            t.last_line = t.warning
+            return
+        rc = await self.run_cmd(t, ["sudo", "-n", "mas", "upgrade"], "mas upgrade", 30.0, 70.0, 20.0)
         if rc != 0:
             raise RuntimeError("mas upgrade failed")
-        if not t.last_line:
-            t.last_line = "App Store apps up to date"
+        t.last_line = f"Upgraded {n} App Store app{'s' if n > 1 else ''}"
 
     async def task_uv(self, t: TaskState) -> None:
         uv_path = shutil.which("uv") or ""
@@ -412,37 +462,6 @@ class RefreshDashboard:
                 t.progress = 100.0
                 t.last_line = "No extra global packages to update"
 
-    async def task_pip(self, t: TaskState) -> None:
-        py_path = shutil.which("python3") or ""
-        real_py = os.path.realpath(py_path) if py_path else ""
-        if py_path == "/usr/bin/python3" or real_py.startswith("/Library/Developer/") or real_py.startswith("/System/"):
-            await asyncio.sleep(0.15)
-            t.progress = 100.0
-            t.last_line = "System Python (managed via uv)"
-            return
-
-        check_code = (
-            "import sysconfig, os\n"
-            "for s in ('stdlib','platstdlib','purelib','platlib'):\n"
-            "  p = sysconfig.get_path(s)\n"
-            "  if p and os.path.exists(os.path.join(p, 'EXTERNALLY-MANAGED')): raise SystemExit(0)\n"
-            "raise SystemExit(1)\n"
-        )
-        proc = await asyncio.create_subprocess_exec(
-            "python3", "-c", check_code,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        await proc.wait()
-        if proc.returncode == 0:
-            t.progress = 100.0
-            t.last_line = "PEP 668 externally managed (skipped)"
-            return
-
-        rc = await self.run_cmd(t, ["python3", "-m", "pip", "install", "--upgrade", "pip"], "pip upgrade", 0.0, 100.0, 2.5)
-        if rc != 0:
-            raise RuntimeError("pip upgrade failed")
-
     async def task_neovim(self, t: TaskState) -> None:
         rc = await self.run_cmd(
             t,
@@ -456,30 +475,26 @@ class RefreshDashboard:
             raise RuntimeError("Neovim Lazy! sync failed")
         t.last_line = "AstroNvim / Lazy plugins synced"
 
-    async def task_gh(self, t: TaskState) -> None:
-        proc = await asyncio.create_subprocess_exec(
-            "gh", "extension", "list",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-        out, _ = await proc.communicate()
-        if not out.strip():
-            await asyncio.sleep(0.15)
-            t.progress = 100.0
-            t.last_line = "No extensions installed"
-            return
-
-        rc = await self.run_cmd(t, ["gh", "extension", "upgrade", "--all"], "gh extension upgrade", 20.0, 80.0, 2.5)
+    async def task_claude(self, t: TaskState) -> None:
+        # Native install in ~/.local/bin; the desktop app updates itself.
+        rc = await self.run_cmd(t, ["claude", "update"], "claude update", 0.0, 100.0, 6.0)
         if rc != 0:
-            raise RuntimeError("gh extension upgrade failed")
-        t.last_line = "Extensions upgraded"
-
-    async def task_vscode(self, t: TaskState) -> None:
-        rc = await self.run_cmd(t, ["code", "--update-extensions"], "code --update-extensions", 0.0, 100.0, 3.0)
-        if rc != 0:
-            raise RuntimeError("VS Code extension update failed")
+            raise RuntimeError("claude update failed")
         if not t.last_line:
-            t.last_line = "Extensions up to date"
+            t.last_line = "Up to date"
+
+    async def task_cleanup(self, t: TaskState) -> None:
+        # Cache trims only. Never `container image prune`: it deletes the rkade-sync image.
+        if shutil.which("uv"):
+            rc = await self.run_cmd(t, ["uv", "cache", "prune"], "uv cache prune", 0.0, 50.0, 3.0)
+            if rc != 0:
+                raise RuntimeError("uv cache prune failed")
+        t.progress = 50.0
+        if shutil.which("npm"):
+            rc = await self.run_cmd(t, ["npm", "cache", "clean", "--force"], "npm cache clean", 50.0, 50.0, 2.0)
+            if rc != 0:
+                raise RuntimeError("npm cache clean failed")
+        t.last_line = "uv and npm caches trimmed"
 
     # ── Orchestrator & DAG Scheduler ──────────────────────────────────
 
@@ -498,9 +513,9 @@ class RefreshDashboard:
             assert t.runner is not None
             await t.runner(t)
             t.progress = 100.0
-            t.status = "done"
+            t.status = "warn" if t.warning else "done"
             t.step_label = "Complete"
-            self.log_event(t.name, t.last_line or "Completed", "green")
+            self.log_event(t.name, t.last_line or "Completed", "yellow" if t.warning else "green")
         except asyncio.CancelledError:
             t.status = "failed"
             t.step_label = "Cancelled"
@@ -517,7 +532,8 @@ class RefreshDashboard:
 
     def build_renderable(self, final: bool = False) -> RenderableType:
         total_tasks = len(self.tasks)
-        done_tasks = sum(1 for t in self.tasks if t.status in ("done", "failed"))
+        done_tasks = sum(1 for t in self.tasks if t.status in ("done", "warn", "failed"))
+        warn_tasks = sum(1 for t in self.tasks if t.status == "warn")
         failed_tasks = sum(1 for t in self.tasks if t.status == "failed")
         running_tasks = sum(1 for t in self.tasks if t.status == "running")
         overall_pct = sum(t.progress for t in self.tasks) / max(1, total_tasks)
@@ -529,7 +545,9 @@ class RefreshDashboard:
         header_grid.add_column(justify="right")
 
         if done_tasks == total_tasks:
-            if failed_tasks == 0:
+            if failed_tasks == 0 and warn_tasks:
+                status_text = Text(f"✓ {total_tasks} tasks complete, {warn_tasks} need attention", style="bold yellow")
+            elif failed_tasks == 0:
                 status_text = Text(f"✓ All {total_tasks} tasks complete", style="bold bright_green")
             else:
                 status_text = Text(f"⚠ {done_tasks - failed_tasks} succeeded, {failed_tasks} failed", style="bold yellow")
@@ -594,6 +612,13 @@ class RefreshDashboard:
                 pct_txt = Text("100%", style="green")
                 time_txt = Text(f"{t.elapsed:4.1f}s", style="dim")
                 detail_txt = Text(t.last_line or "Complete", style="dim")
+            elif t.status == "warn":
+                icon = Text("!", style="bold yellow")
+                name_txt = Text(t.name, style="yellow")
+                bar = ProgressBar(total=100.0, completed=100.0, width=18, style="grey23", complete_style="yellow", finished_style="yellow")
+                pct_txt = Text("100%", style="yellow")
+                time_txt = Text(f"{t.elapsed:4.1f}s", style="dim")
+                detail_txt = Text(t.last_line or t.warning, style="yellow")
             elif t.status == "failed":
                 icon = Text("✗", style="bold bright_red")
                 name_txt = Text(t.name, style="bold bright_red")
@@ -651,7 +676,7 @@ class RefreshDashboard:
                 )
             )
 
-        border_color = "bright_green" if (done_tasks == total_tasks and failed_tasks == 0) else ("yellow" if done_tasks == total_tasks else "bright_blue")
+        border_color = "bright_green" if (done_tasks == total_tasks and failed_tasks == 0 and warn_tasks == 0) else ("yellow" if done_tasks == total_tasks else "bright_blue")
         return Panel(
             Group(*components),
             border_style=border_color,
@@ -679,14 +704,13 @@ class RefreshDashboard:
             self.add_task("uv", "UV + Python", "Tools", self.task_uv, deps=brew_dep)
         if shutil.which("npm"):
             self.add_task("npm", "npm globals", "Tools", self.task_npm, deps=brew_dep)
-        if shutil.which("python3"):
-            self.add_task("pip", "pip", "Tools", self.task_pip, deps=brew_dep)
+        if shutil.which("claude"):
+            self.add_task("claude", "Claude CLI", "Tools", self.task_claude, deps=[])
+        cleanup_deps = [d for d in ("uv", "npm") if d in self.task_map]
+        if cleanup_deps:
+            self.add_task("cleanup", "Cache cleanup", "Tools", self.task_cleanup, deps=cleanup_deps)
         if shutil.which("nvim"):
             self.add_task("nvim", "Neovim plugins", "Tools", self.task_neovim, deps=brew_dep)
-        if shutil.which("gh"):
-            self.add_task("gh", "GitHub CLI ext", "Tools", self.task_gh, deps=brew_dep)
-        if shutil.which("code"):
-            self.add_task("vscode", "VS Code ext", "Tools", self.task_vscode, deps=brew_dep)
 
         workers = [asyncio.create_task(self.execute_task(t)) for t in self.tasks]
 
@@ -716,6 +740,9 @@ class RefreshDashboard:
                     self.console.print(f"  [dim]{RichEscape(log_line)}[/]")
             return 1
 
+        for t in self.tasks:
+            if t.status == "warn":
+                self.console.print(f" [bold yellow]! {t.name}:[/] [yellow]{RichEscape(t.warning)}[/]")
         self.console.print(" [dim]Run 'source ~/.zshrc' if shell configs changed.[/]")
         return 0
 
